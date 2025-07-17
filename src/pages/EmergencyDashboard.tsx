@@ -1,13 +1,50 @@
 import { useState } from "react";
-import { ArrowLeft, Ambulance, MapPin, Phone, AlertTriangle, Navigation } from "lucide-react";
+import { ArrowLeft, Ambulance, MapPin, Phone, AlertTriangle, Navigation, Edit, Plus, Stethoscope } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const EmergencyDashboard = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
+  const [editingPatient, setEditingPatient] = useState(null);
+  const [newPatient, setNewPatient] = useState({
+    name: "",
+    condition: "",
+    department: "",
+    priority: "Normal"
+  });
+  const [activeAmbulances, setActiveAmbulances] = useState([
+    { id: "AMB001", status: "En Route", patient: "John Doe", location: "Downtown", eta: "5 mins", priority: "Critical" },
+    { id: "AMB002", status: "On Scene", patient: "Jane Smith", location: "Hospital Street", eta: "10 mins", priority: "Urgent" },
+    { id: "AMB003", status: "Available", patient: null, location: "Station A", eta: null, priority: null },
+  ]);
+
+  const departments = [
+    "Cardiology",
+    "Emergency",
+    "Trauma",
+    "Neurology",
+    "Pediatrics",
+    "Orthopedics"
+  ];
 
   const menuItems = [
     { id: "overview", label: "Overview", icon: AlertTriangle },
@@ -15,12 +52,6 @@ const EmergencyDashboard = () => {
     { id: "dispatch", label: "Dispatch", icon: Phone },
     { id: "tracking", label: "Live Tracking", icon: MapPin },
     { id: "alerts", label: "Emergency Alerts", icon: AlertTriangle },
-  ];
-
-  const activeAmbulances = [
-    { id: "AMB001", status: "En Route", patient: "John Doe", location: "Downtown", eta: "5 mins", priority: "Critical" },
-    { id: "AMB002", status: "On Scene", patient: "Jane Smith", location: "Hospital Street", eta: "10 mins", priority: "Urgent" },
-    { id: "AMB003", status: "Available", patient: null, location: "Station A", eta: null, priority: null },
   ];
 
   const emergencyAlerts = [
@@ -39,6 +70,50 @@ const EmergencyDashboard = () => {
       case "Available": return "secondary";
       default: return "secondary";
     }
+  };
+
+  const handleEditPatient = (ambulance) => {
+    setEditingPatient(ambulance);
+  };
+
+  const handleSavePatient = () => {
+    // Update the ambulance data
+    const updatedAmbulances = activeAmbulances.map(amb => 
+      amb.id === editingPatient.id ? editingPatient : amb
+    );
+    setActiveAmbulances(updatedAmbulances);
+    setEditingPatient(null);
+  };
+
+  const handleAddPatient = () => {
+    // Find an available ambulance
+    const availableAmbulance = activeAmbulances.find(amb => amb.status === "Available");
+    if (availableAmbulance) {
+      const updatedAmbulance = {
+        ...availableAmbulance,
+        patient: newPatient.name,
+        status: "En Route",
+        priority: newPatient.priority,
+        eta: "15 mins" // Default ETA
+      };
+      
+      const updatedAmbulances = activeAmbulances.map(amb => 
+        amb.id === availableAmbulance.id ? updatedAmbulance : amb
+      );
+      
+      setActiveAmbulances(updatedAmbulances);
+      setNewPatient({
+        name: "",
+        condition: "",
+        department: "",
+        priority: "Normal"
+      });
+    }
+  };
+
+  const handleReferDepartment = (ambulanceId, department) => {
+    // In a real app, this would update the backend
+    alert(`Patient in ${ambulanceId} referred to ${department}`);
   };
 
   return (
@@ -134,9 +209,88 @@ const EmergencyDashboard = () => {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Active Ambulances</CardTitle>
-                    <CardDescription>Current ambulance fleet status</CardDescription>
+                  <CardHeader className="flex flex-row justify-between items-center">
+                    <div>
+                      <CardTitle>Active Ambulances</CardTitle>
+                      <CardDescription>Current ambulance fleet status</CardDescription>
+                    </div>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="gap-2">
+                          <Plus className="h-4 w-4" />
+                          Add Patient
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add New Patient</DialogTitle>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="name" className="text-right">
+                              Name
+                            </Label>
+                            <Input
+                              id="name"
+                              value={newPatient.name}
+                              onChange={(e) => setNewPatient({...newPatient, name: e.target.value})}
+                              className="col-span-3"
+                            />
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="condition" className="text-right">
+                              Condition
+                            </Label>
+                            <Input
+                              id="condition"
+                              value={newPatient.condition}
+                              onChange={(e) => setNewPatient({...newPatient, condition: e.target.value})}
+                              className="col-span-3"
+                            />
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="department" className="text-right">
+                              Department
+                            </Label>
+                            <Select
+                              value={newPatient.department}
+                              onValueChange={(value) => setNewPatient({...newPatient, department: value})}
+                            >
+                              <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Select department" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {departments.map(dept => (
+                                  <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="priority" className="text-right">
+                              Priority
+                            </Label>
+                            <Select
+                              value={newPatient.priority}
+                              onValueChange={(value) => setNewPatient({...newPatient, priority: value})}
+                            >
+                              <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Select priority" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Normal">Normal</SelectItem>
+                                <SelectItem value="Urgent">Urgent</SelectItem>
+                                <SelectItem value="Critical">Critical</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline">Cancel</Button>
+                          <Button onClick={handleAddPatient}>Save</Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
@@ -156,6 +310,32 @@ const EmergencyDashboard = () => {
                             {ambulance.eta && (
                               <p className="text-sm text-muted-foreground">ETA: {ambulance.eta}</p>
                             )}
+                            <div className="flex gap-2 justify-end">
+                              {ambulance.patient && (
+                                <>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-6 p-1"
+                                    onClick={() => handleEditPatient(ambulance)}
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                  </Button>
+                                  <Select
+                                    onValueChange={(value) => handleReferDepartment(ambulance.id, value)}
+                                  >
+                                    <SelectTrigger className="h-6 w-24">
+                                      <SelectValue placeholder="Refer to" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {departments.map(dept => (
+                                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -218,6 +398,90 @@ const EmergencyDashboard = () => {
                 </CardContent>
               </Card>
             </div>
+          )}
+
+          {/* Edit Patient Dialog */}
+          {editingPatient && (
+            <Dialog open={true} onOpenChange={() => setEditingPatient(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Patient Details</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="name" className="text-right">
+                      Name
+                    </Label>
+                    <Input
+                      id="name"
+                      value={editingPatient.patient}
+                      onChange={(e) => setEditingPatient({
+                        ...editingPatient,
+                        patient: e.target.value
+                      })}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="location" className="text-right">
+                      Location
+                    </Label>
+                    <Input
+                      id="location"
+                      value={editingPatient.location}
+                      onChange={(e) => setEditingPatient({
+                        ...editingPatient,
+                        location: e.target.value
+                      })}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="eta" className="text-right">
+                      ETA
+                    </Label>
+                    <Input
+                      id="eta"
+                      value={editingPatient.eta}
+                      onChange={(e) => setEditingPatient({
+                        ...editingPatient,
+                        eta: e.target.value
+                      })}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="priority" className="text-right">
+                      Priority
+                    </Label>
+                    <Select
+                      value={editingPatient.priority}
+                      onValueChange={(value) => setEditingPatient({
+                        ...editingPatient,
+                        priority: value
+                      })}
+                    >
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Select priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Normal">Normal</SelectItem>
+                        <SelectItem value="Urgent">Urgent</SelectItem>
+                        <SelectItem value="Critical">Critical</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setEditingPatient(null)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSavePatient}>
+                    Save Changes
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           )}
 
           {activeTab === "ambulances" && (

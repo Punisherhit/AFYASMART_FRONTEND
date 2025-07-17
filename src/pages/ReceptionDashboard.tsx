@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Users, UserPlus, Clock, CheckCircle, Search, Filter, CreditCard, Receipt, DollarSign } from "lucide-react";
+import { Users, UserPlus, Clock, CheckCircle, Search, Filter, CreditCard, Receipt, DollarSign, Pill, Activity, Stethoscope, ClipboardList } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import HospitalLayout from "@/components/HospitalLayout";
 import PatientFlowTracker from "@/components/PatientFlowTracker";
@@ -20,18 +20,65 @@ type Patient = {
   priority: string;
   department: string;
   amount: number;
+  journey: {
+    step: string;
+    timestamp: string;
+    details?: string;
+  }[];
 };
 
 const ReceptionDashboard = () => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("overview");
   const [isBillingDialogOpen, setIsBillingDialogOpen] = useState(false);
+  const [isPatientDetailsOpen, setIsPatientDetailsOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
-  const [waitingPatients, setWaitingPatients] = useState([
-    { id: 1, name: "John Doe", appointment: "10:00 AM", status: "waiting", priority: "normal", department: "Cardiology", amount: 2500 },
-    { id: 2, name: "Jane Smith", appointment: "10:30 AM", status: "ready-for-billing", priority: "urgent", department: "Neurology", amount: 3200 },
-    { id: 3, name: "Mike Johnson", appointment: "11:00 AM", status: "waiting", priority: "normal", department: "Orthopedics", amount: 1800 }
+  const [waitingPatients, setWaitingPatients] = useState<Patient[]>([
+    { 
+      id: 1, 
+      name: "John Doe", 
+      appointment: "10:00 AM", 
+      status: "waiting", 
+      priority: "normal", 
+      department: "Cardiology", 
+      amount: 2500,
+      journey: [
+        { step: "Registration", timestamp: "09:45 AM", details: "Basic information collected" },
+        { step: "Vitals Check", timestamp: "09:55 AM", details: "BP: 120/80, Temp: 98.6°F" },
+        { step: "Doctor Consultation", timestamp: "10:20 AM", details: "Diagnosis: Hypertension" },
+        { step: "Lab Tests", timestamp: "10:45 AM", details: "Blood work completed" }
+      ]
+    },
+    { 
+      id: 2, 
+      name: "Jane Smith", 
+      appointment: "10:30 AM", 
+      status: "ready-for-billing", 
+      priority: "urgent", 
+      department: "Neurology", 
+      amount: 3200,
+      journey: [
+        { step: "Registration", timestamp: "10:15 AM", details: "Emergency case" },
+        { step: "Vitals Check", timestamp: "10:20 AM", details: "BP: 140/90, Temp: 99.1°F" },
+        { step: "Doctor Consultation", timestamp: "10:35 AM", details: "Referred for MRI" },
+        { step: "MRI Scan", timestamp: "11:00 AM", details: "Scan completed" }
+      ]
+    },
+    { 
+      id: 3, 
+      name: "Mike Johnson", 
+      appointment: "11:00 AM", 
+      status: "waiting", 
+      priority: "normal", 
+      department: "Orthopedics", 
+      amount: 1800,
+      journey: [
+        { step: "Registration", timestamp: "10:45 AM" },
+        { step: "Vitals Check", timestamp: "10:55 AM" },
+        { step: "X-Ray", timestamp: "11:15 AM", details: "Left ankle fracture confirmed" }
+      ]
+    }
   ]);
 
   const [billingForm, setBillingForm] = useState({
@@ -49,9 +96,16 @@ const ReceptionDashboard = () => {
     switch (status) {
       case "waiting": return "bg-yellow-100 text-yellow-800";
       case "ready-for-billing": return "bg-orange-100 text-orange-800";
-      case "completed": return "bg-accent text-accent-foreground";
+      case "completed": return "bg-green-100 text-green-800";
+      case "pharmacy": return "bg-purple-100 text-purple-800";
       default: return "bg-muted text-muted-foreground";
     }
+  };
+
+  const calculateTotalRevenue = () => {
+    return waitingPatients
+      .filter(p => p.status === "completed")
+      .reduce((sum, p) => sum + p.amount, 0);
   };
 
   const handleProcessBilling = async (e: React.FormEvent) => {
@@ -61,17 +115,55 @@ const ReceptionDashboard = () => {
     setWaitingPatients(prev => 
       prev.map(patient => 
         patient.id === selectedPatient?.id 
-          ? { ...patient, status: "completed", amount: totalAmount }
+          ? { 
+              ...patient, 
+              status: "pharmacy", 
+              amount: totalAmount,
+              journey: [
+                ...patient.journey,
+                { 
+                  step: "Payment Completed", 
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  details: `Paid KSh ${totalAmount.toLocaleString()} via ${billingForm.paymentMethod}`
+                }
+              ]
+            }
           : patient
       )
     );
 
     toast({
       title: "Payment Processed",
-      description: `Successfully processed payment of KSh ${totalAmount.toLocaleString()}`
+      description: `Successfully processed payment of KSh ${totalAmount.toLocaleString()}. Patient sent to pharmacy.`
     });
 
     setIsBillingDialogOpen(false);
+  };
+
+  const handleSendToPharmacy = (patientId: number) => {
+    setWaitingPatients(prev => 
+      prev.map(patient => 
+        patient.id === patientId 
+          ? { 
+              ...patient, 
+              status: "completed",
+              journey: [
+                ...patient.journey,
+                { 
+                  step: "Pharmacy", 
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  details: "Medication dispensed"
+                }
+              ]
+            }
+          : patient
+      )
+    );
+
+    toast({
+      title: "Patient Completed",
+      description: "Patient has received medication from pharmacy"
+    });
   };
 
   const totalAmount = billingForm.consultationFee + billingForm.labTests + billingForm.medication + billingForm.procedures - billingForm.discount;
@@ -110,19 +202,45 @@ const ReceptionDashboard = () => {
                     onChange={(e) => setBillingForm(prev => ({ ...prev, labTests: Number(e.target.value) }))}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label>Medication</Label>
+                  <Input
+                    type="number"
+                    value={billingForm.medication}
+                    onChange={(e) => setBillingForm(prev => ({ ...prev, medication: Number(e.target.value) }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Procedures</Label>
+                  <Input
+                    type="number"
+                    value={billingForm.procedures}
+                    onChange={(e) => setBillingForm(prev => ({ ...prev, procedures: Number(e.target.value) }))}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Payment Method</Label>
-                <Select value={billingForm.paymentMethod} onValueChange={(value) => setBillingForm(prev => ({ ...prev, paymentMethod: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select payment method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {paymentMethods.map(method => (
-                      <SelectItem key={method} value={method}>{method}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Payment Method</Label>
+                  <Select value={billingForm.paymentMethod} onValueChange={(value) => setBillingForm(prev => ({ ...prev, paymentMethod: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select payment method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {paymentMethods.map(method => (
+                        <SelectItem key={method} value={method}>{method}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Discount</Label>
+                  <Input
+                    type="number"
+                    value={billingForm.discount}
+                    onChange={(e) => setBillingForm(prev => ({ ...prev, discount: Number(e.target.value) }))}
+                  />
+                </div>
               </div>
               <div className="p-4 bg-muted/50 rounded-lg">
                 <div className="flex justify-between items-center font-semibold">
@@ -163,22 +281,24 @@ const ReceptionDashboard = () => {
           </Card>
           <Card className="hover:shadow-hover transition-shadow duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Completed Today</CardTitle>
-              <CheckCircle className="h-4 w-4 text-accent" />
+              <CardTitle className="text-sm font-medium">At Pharmacy</CardTitle>
+              <Pill className="h-4 w-4 text-purple-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{waitingPatients.filter(p => p.status === "completed").length}</div>
-              <p className="text-xs text-muted-foreground mt-1">Discharged patients</p>
+              <div className="text-3xl font-bold">{waitingPatients.filter(p => p.status === "pharmacy").length}</div>
+              <p className="text-xs text-muted-foreground mt-1">Getting medication</p>
             </CardContent>
           </Card>
           <Card className="hover:shadow-hover transition-shadow duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Today's Revenue</CardTitle>
-              <DollarSign className="h-4 w-4 text-accent" />
+              <DollarSign className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">KSh {waitingPatients.filter(p => p.status === "completed").reduce((sum, p) => sum + p.amount, 0).toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-1">Processed payments</p>
+              <div className="text-3xl font-bold">KSh {calculateTotalRevenue().toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {waitingPatients.filter(p => p.status === "completed").length} completed payments
+              </p>
             </CardContent>
           </Card>
           <Card className="hover:shadow-hover transition-shadow duration-300">
@@ -198,13 +318,34 @@ const ReceptionDashboard = () => {
           <div className="lg:col-span-2">
             <Card>
               <CardHeader>
-                <CardTitle>Patient Queue</CardTitle>
-                <CardDescription>Current patients waiting for service</CardDescription>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Patient Queue</CardTitle>
+                    <CardDescription>Current patients waiting for service</CardDescription>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button variant="outline" size="sm">
+                      <Search className="h-4 w-4 mr-2" />
+                      Search
+                    </Button>
+                    <Button variant="outline" size="sm">
+                      <Filter className="h-4 w-4 mr-2" />
+                      Filter
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   {waitingPatients.map(patient => (
-                    <div key={patient.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors">
+                    <div 
+                      key={patient.id} 
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => {
+                        setSelectedPatient(patient);
+                        setIsPatientDetailsOpen(true);
+                      }}
+                    >
                       <div className="flex items-center space-x-4">
                         <div className="w-12 h-12 bg-gradient-medical rounded-full flex items-center justify-center">
                           <span className="text-white font-semibold">{patient.name.charAt(0)}</span>
@@ -215,21 +356,38 @@ const ReceptionDashboard = () => {
                             {patient.appointment} • {patient.department}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Est. Amount: KSh {patient.amount.toLocaleString()}
+                            Amount: KSh {patient.amount.toLocaleString()}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center space-x-3">
                         <Badge className={getStatusColor(patient.status)}>
-                          {patient.status.replace("-", " ")}
+                          {patient.status.replace(/-/g, " ")}
                         </Badge>
                         {patient.status === "ready-for-billing" && (
-                          <Button size="sm" onClick={() => {
-                            setSelectedPatient(patient);
-                            setIsBillingDialogOpen(true);
-                          }}>
+                          <Button 
+                            size="sm" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPatient(patient);
+                              setIsBillingDialogOpen(true);
+                            }}
+                          >
                             <CreditCard className="h-4 w-4 mr-1" />
                             Bill
+                          </Button>
+                        )}
+                        {patient.status === "pharmacy" && (
+                          <Button 
+                            size="sm" 
+                            variant="secondary"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSendToPharmacy(patient.id);
+                            }}
+                          >
+                            <Pill className="h-4 w-4 mr-1" />
+                            Complete
                           </Button>
                         )}
                       </div>
@@ -239,8 +397,76 @@ const ReceptionDashboard = () => {
               </CardContent>
             </Card>
           </div>
-          <div>
-            <PatientFlowTracker patientId="P-2024-001" currentStep="doctor" />
+          <div className="space-y-6">
+            <PatientFlowTracker 
+              patientId={selectedPatient ? `P-2024-${selectedPatient.id.toString().padStart(3, '0')}` : "P-2024-000"} 
+              currentStep={selectedPatient?.status === "pharmacy" ? "pharmacy" : selectedPatient?.status === "completed" ? "completed" : "doctor"} 
+            />
+            
+            {selectedPatient && (
+              <Dialog open={isPatientDetailsOpen} onOpenChange={setIsPatientDetailsOpen}>
+                <DialogContent className="sm:max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Patient Journey - {selectedPatient.name}</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h3 className="font-semibold mb-2">Patient Information</h3>
+                        <div className="space-y-2 text-sm">
+                          <p><span className="text-muted-foreground">ID:</span> P-2024-{selectedPatient.id.toString().padStart(3, '0')}</p>
+                          <p><span className="text-muted-foreground">Appointment:</span> {selectedPatient.appointment}</p>
+                          <p><span className="text-muted-foreground">Department:</span> {selectedPatient.department}</p>
+                          <p><span className="text-muted-foreground">Priority:</span> {selectedPatient.priority}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold mb-2">Billing Information</h3>
+                        <div className="space-y-2 text-sm">
+                          <p><span className="text-muted-foreground">Status:</span> <Badge className={getStatusColor(selectedPatient.status)}>{selectedPatient.status.replace(/-/g, " ")}</Badge></p>
+                          <p><span className="text-muted-foreground">Amount Due:</span> KSh {selectedPatient.amount.toLocaleString()}</p>
+                          {selectedPatient.status === "completed" && (
+                            <p className="text-green-600 font-medium">Payment completed</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h3 className="font-semibold mb-2">Patient Journey</h3>
+                      <div className="space-y-4">
+                        {selectedPatient.journey.map((step, index) => (
+                          <div key={index} className="flex items-start">
+                            <div className="flex flex-col items-center mr-4">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                index === selectedPatient.journey.length - 1 ? "bg-primary text-primary-foreground" : "bg-muted"
+                              }`}>
+                                {step.step === "Registration" && <UserPlus className="h-4 w-4" />}
+                                {step.step === "Vitals Check" && <Activity className="h-4 w-4" />}
+                                {step.step === "Doctor Consultation" && <Stethoscope className="h-4 w-4" />}
+                                {step.step === "Lab Tests" && <ClipboardList className="h-4 w-4" />}
+                                {step.step === "Payment Completed" && <CreditCard className="h-4 w-4" />}
+                                {step.step === "Pharmacy" && <Pill className="h-4 w-4" />}
+                              </div>
+                              {index < selectedPatient.journey.length - 1 && (
+                                <div className="w-px h-6 bg-muted my-1"></div>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium">{step.step}</div>
+                              <div className="text-sm text-muted-foreground">{step.timestamp}</div>
+                              {step.details && (
+                                <div className="text-sm mt-1 p-2 bg-muted/50 rounded">{step.details}</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
         </div>
       </div>

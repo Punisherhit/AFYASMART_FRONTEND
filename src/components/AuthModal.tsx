@@ -60,38 +60,20 @@ const AuthModal = ({ isOpen, onClose, onLogin }: AuthModalProps) => {
     specialization: "" // For doctors
   });
 
-  const userTypes = [
-    { 
-      value: "patient", 
-      label: "Patient", 
-      icon: User,
-      description: "Book appointments and manage your health"
-    },
-    { 
-      value: "doctor", 
-      label: "Doctor", 
-      icon: Stethoscope,
-      description: "Manage appointments and patient care"
-    },
-    { 
-      value: "admin", 
-      label: "Admin", 
-      icon: Shield,
-      description: "System administration and management"
-    },
-    { 
-      value: "receptionist", 
-      label: "Receptionist", 
-      icon: UserCircle,
-      description: "Handle billing and patient flow"
-    },
-    { 
-      value: "pharmacist", 
-      label: "Pharmacist", 
-      icon: User,
-      description: "Dispense medications and manage pharmacy"
-    }
-  ];
+const userTypes = [
+  { value: "patient", label: "Patient", icon: User, description: "Book appointments and manage your health" },
+  { value: "doctor", label: "Doctor", icon: Stethoscope, description: "Manage appointments and patient care" },
+  { value: "admin", label: "Admin", icon: Shield, description: "System administration and management" },
+  { value: "receptionist", label: "Receptionist", icon: UserCircle, description: "Handle billing and patient flow" },
+  { value: "pharmacist", label: "Pharmacist", icon: User, description: "Dispense medications and manage pharmacy" },
+  { value: "lab", label: "Lab", icon: User, description: "Conduct lab tests and report results" },
+  { value: "radiology", label: "Radiology", icon: User, description: "Perform and interpret imaging scans" },
+  { value: "emergency", label: "Emergency", icon: User, description: "Handle emergency medical cases" },
+  { value: "billing", label: "Billing", icon: User, description: "Process hospital payments and invoices" },
+  { value: "triage", label: "Triage", icon: User, description: "Prioritize and assess patient severity" },
+  { value: "surgery", label: "Surgery", icon: User, description: "Perform and manage surgical operations" },
+];
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

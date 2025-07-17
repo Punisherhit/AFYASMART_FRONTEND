@@ -50,7 +50,8 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Role-based redirect */}
-      <RoleBasedRedirect user={currentUser} />
+      {/* <RoleBasedRedirect user={currentUser} /> */}
+      
       
       {/* Navigation */}
       <Navbar onGetStartedClick={handleGetStartedClick} />
