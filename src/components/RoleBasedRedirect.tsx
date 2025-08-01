@@ -7,53 +7,51 @@ interface User {
 
 interface RoleBasedRedirectProps {
   user: User | null | undefined;
+  loading?: boolean;
+  error?: Error | null;
 }
 
-const RoleBasedRedirect = ({ user }: RoleBasedRedirectProps) => {
+const RoleBasedRedirect = ({ user, loading = false, error = null }: RoleBasedRedirectProps) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-  if (user?.role) {
-    switch (user.role) {
-      case 'admin':
-        navigate('/dashboard');
-        break;
-      case 'doctor':
-        navigate('/doctor-dashboard');
-        break;
-      case 'patient':
-        navigate('/patient-dashboard');
-        break;
-      case 'receptionist':
-        navigate('/reception-dashboard');
-        break;
-      case 'pharmacist':
-        navigate('/pharmacy-dashboard');
-        break;
-      case 'lab':
-        navigate('/lab-dashboard');
-        break;
-      case 'radiology':
-        navigate('/radiology-dashboard');
-        break;
-      case 'emergency':
-        navigate('/emergency-dashboard');
-        break;
-      case 'billing':
-        navigate('/billing-dashboard');
-        break;
-      case 'surgery':
-        navigate('/surgery-dashboard');
-        break;
-      case 'triage':
-        navigate('/triage-dashboard');
-        break;
-      default:
-        navigate('/');
+    console.log('Redirection check:', { user, loading, error }); // Debug log
+    
+    if (loading) {
+      console.log('Still loading...');
+      return;
     }
-  }
-}, [user, navigate]);
+    
+    if (error) {
+      console.error('Auth error:', error);
+      navigate('/');
+      return;
+    }
 
+    if (!user?.role) {
+      console.log('No user role, redirecting to /');
+      navigate('/');
+      return;
+    }
+
+    const roleRoutes: Record<string, string> = {
+      admin: '/admin-dashboard',
+      doctor: '/doctor-dashboard',
+      patient: '/patient-dashboard',
+      receptionist: '/reception-dashboard',
+      pharmacist: '/pharmacy-dashboard',
+      lab: '/lab-dashboard',
+      radiology: '/radiology-dashboard',
+      emergency: '/emergency-dashboard',
+      billing: '/billing-dashboard',
+      surgery: '/surgery-dashboard', // Fixed typo from previous version
+      triage: '/triage-dashboard',
+    };
+
+    const route = roleRoutes[user.role] || '/';
+    console.log(`Redirecting ${user.role} to ${route}`);
+    navigate(route);
+  }, [user, loading, error, navigate]);
 
   return null;
 };

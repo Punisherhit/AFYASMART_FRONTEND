@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Heart, Thermometer, Activity, Clock, AlertTriangle, Users, Scale, Ruler } from "lucide-react";
+import { Heart, Thermometer, Activity, Clock, AlertTriangle, Users, Scale, Ruler, ArrowLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -298,7 +298,12 @@ export default function TriageDashboard() {
     <div className="min-h-screen bg-gradient-to-br from-background to-secondary/20 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-foreground">Triage Dashboard</h1>
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" className="rounded-full">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-3xl font-bold text-foreground">Triage Dashboard</h1>
+          </div>
           <div className="flex gap-2">
             <Badge variant="outline" className="text-sm">Nursing Station</Badge>
             
