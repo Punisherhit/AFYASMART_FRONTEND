@@ -1,43 +1,84 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, PieChart, Pie, Cell, LineChart, Line, ResponsiveContainer } from "recharts";
-import { Activity, TrendingUp, Users, AlertCircle, ArrowLeft } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { Activity, TrendingUp, Users, AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [diseaseData, setDiseaseData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [stats, setStats] = useState({
+    totalCases: 0,
+    mostCommon: "",
+    patientsMonitored: 0,
+    criticalCases: 0
+  });
 
-  // Mock data for demonstration - replace with actual API call
-  useEffect(() => {
-    const mockData = [
-      { name: "Hypertension", cases: 45, percentage: 23, trend: "up" },
-      { name: "Diabetes", cases: 38, percentage: 19, trend: "stable" },
-      { name: "COVID-19", cases: 22, percentage: 11, trend: "down" },
-      { name: "Malaria", cases: 35, percentage: 18, trend: "up" },
-      { name: "Pneumonia", cases: 28, percentage: 14, trend: "down" },
-      { name: "Others", cases: 32, percentage: 15, trend: "stable" }
-    ];
-    
-    setTimeout(() => {
-      setDiseaseData(mockData);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // 1. First check if backend is reachable
+      try {
+        await axios.get('http://localhost:5000/api/v1/health', { timeout: 3000 });
+      } catch (healthErr) {
+        throw new Error("Backend server is not responding");
+      }
+
+      // 2. Fetch data with proper error handling
+      const api = axios.create({
+        baseURL: 'http://localhost:5000/api/v1',
+        timeout: 8000,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const [diseasesRes, statsRes] = await Promise.all([
+        api.get('/diseases?limit=100'), // Get all records
+        api.get('/diseases/stats')
+      ]);
+
+      // Handle different possible response structures
+      const diseases = diseasesRes.data?.data || diseasesRes.data?.docs || diseasesRes.data || [];
+      const statsData = statsRes.data?.data || statsRes.data || {};
+
+      if (!Array.isArray(diseases)) {
+        throw new Error("Invalid disease data format from server");
+      }
+
+      // Calculate fallback values
+      const totalCases = diseases.reduce((sum, d) => sum + (d.cases || 0), 0);
+      const criticalCases = diseases.filter(d => d.status === 'High').length;
+
+      setDiseaseData(diseases);
+      setStats({
+        totalCases: statsData.totalCases || totalCases,
+        mostCommon: statsData.mostCommon || (diseases[0]?.name || "N/A"),
+        patientsMonitored: statsData.patientsMonitored || 0,
+        criticalCases: statsData.criticalCases || criticalCases
+      });
+
+    } catch (err) {
+      console.error("Fetch error:", err);
+      setError(
+        err.response?.data?.message || 
+        err.message || 
+        "Network error. Please check your connection and try again."
+      );
+    } finally {
       setLoading(false);
-    }, 1000);
-  }, []);
-
-  const chartConfig = {
-    cases: {
-      label: "Cases",
-      color: "hsl(var(--primary))"
-    },
-    percentage: {
-      label: "Percentage",
-      color: "hsl(var(--accent))"
     }
   };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const COLORS = [
     "hsl(var(--primary))",
@@ -53,175 +94,224 @@ const Dashboard = () => {
       <div className="min-h-screen bg-background p-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+            <div className="flex flex-col items-center gap-4">
+              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-muted-foreground">Loading dashboard data...</p>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  const totalCases = diseaseData.reduce((sum, disease) => sum + disease.cases, 0);
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col items-center justify-center h-64 gap-4">
+            <AlertCircle className="h-12 w-12 text-destructive" />
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-bold text-destructive">Data Loading Failed</h3>
+              <p className="text-muted-foreground max-w-md">{error}</p>
+              <div className="pt-4 flex gap-2 justify-center">
+                <Button 
+                  variant="default" 
+                  onClick={fetchData}
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Retry
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => navigate("/")}
+                >
+                  Back to Home
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button 
               variant="ghost" 
-              size="sm"
-              onClick={() => {
-                console.log("Back button clicked");
-                navigate("/");
-              }}
-              className="flex items-center gap-2 hover:bg-accent-light"
+              onClick={() => navigate("/")}
+              className="flex items-center gap-2"
             >
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
             <div>
               <h1 className="text-3xl font-bold text-foreground">Disease Analytics Dashboard</h1>
-              <p className="text-muted-foreground">Monitor disease rates and health trends in real-time</p>
+              <p className="text-muted-foreground">Real-time disease monitoring</p>
             </div>
           </div>
+          <Button 
+            variant="outline" 
+            onClick={fetchData}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
         </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="bg-gradient-card shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Total Cases</CardTitle>
               <Activity className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">{totalCases}</div>
-              <p className="text-xs text-muted-foreground">+12% from last month</p>
+              <div className="text-2xl font-bold">{stats.totalCases.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">All recorded cases</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-card shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Most Common</CardTitle>
               <TrendingUp className="h-4 w-4 text-accent" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">Hypertension</div>
-              <p className="text-xs text-muted-foreground">23% of total cases</p>
+              <div className="text-2xl font-bold">{stats.mostCommon}</div>
+              <p className="text-xs text-muted-foreground">
+                {diseaseData.find(d => d.name === stats.mostCommon)?.percentage?.toFixed(2) || 0}% of total
+              </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-card shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Patients Monitored</CardTitle>
               <Users className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">1,247</div>
-              <p className="text-xs text-muted-foreground">Active patients</p>
+              <div className="text-2xl font-bold">{stats.patientsMonitored.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">Active cases</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-card shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Critical Cases</CardTitle>
               <AlertCircle className="h-4 w-4 text-destructive" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">8</div>
-              <p className="text-xs text-muted-foreground">Requiring immediate attention</p>
+              <div className="text-2xl font-bold">{stats.criticalCases.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">Requiring attention</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Charts Grid */}
+        {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Bar Chart */}
-          <Card className="bg-gradient-card shadow-card">
+          <Card>
             <CardHeader>
-              <CardTitle>Disease Cases by Type</CardTitle>
-              <CardDescription>Current distribution of cases across different diseases</CardDescription>
+              <CardTitle>Cases by Disease</CardTitle>
+              <CardDescription>Distribution across disease types</CardDescription>
             </CardHeader>
-            <CardContent>
-              <ChartContainer config={chartConfig} className="h-64">
+            <CardContent className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={diseaseData}>
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="cases" fill="var(--color-cases)" radius={[4, 4, 0, 0]} />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip 
+                    formatter={(value) => [value.toLocaleString(), 'Cases']}
+                    labelFormatter={(label) => `Disease: ${label}`}
+                  />
+                  <Bar 
+                    dataKey="cases" 
+                    fill="hsl(var(--primary))" 
+                    radius={[4, 4, 0, 0]} 
+                    name="Cases"
+                  />
                 </BarChart>
-              </ChartContainer>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
 
-          {/* Pie Chart */}
-          <Card className="bg-gradient-card shadow-card">
+          <Card>
             <CardHeader>
-              <CardTitle>Disease Distribution</CardTitle>
-              <CardDescription>Percentage breakdown of all recorded cases</CardDescription>
+              <CardTitle>Case Distribution</CardTitle>
+              <CardDescription>Percentage breakdown</CardDescription>
             </CardHeader>
-            <CardContent>
-              <ChartContainer config={chartConfig} className="h-64">
+            <CardContent className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={diseaseData}
+                    dataKey="percentage"
+                    nameKey="name"
                     cx="50%"
                     cy="50%"
                     outerRadius={80}
-                    dataKey="percentage"
-                    label={({ name, percentage }) => `${name}: ${percentage}%`}
+                    label={({ name, percentage }) => `${name}: ${percentage?.toFixed(2)}%`}
                   >
                     {diseaseData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Tooltip 
+                    formatter={(value) => [`${value?.toFixed(2)}%`, 'Percentage']}
+                  />
                 </PieChart>
-              </ChartContainer>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
         </div>
 
-        {/* Disease Details Table */}
-        <Card className="bg-gradient-card shadow-card">
+        {/* Disease Table */}
+        <Card>
           <CardHeader>
-            <CardTitle>Detailed Disease Statistics</CardTitle>
-            <CardDescription>Comprehensive view of all disease metrics</CardDescription>
+            <CardTitle>Detailed Statistics</CardTitle>
+            <CardDescription>Complete disease metrics</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
+              <table className="w-full">
                 <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left p-4 font-medium">Disease</th>
-                    <th className="text-left p-4 font-medium">Cases</th>
-                    <th className="text-left p-4 font-medium">Percentage</th>
-                    <th className="text-left p-4 font-medium">Trend</th>
-                    <th className="text-left p-4 font-medium">Status</th>
+                  <tr className="border-b">
+                    <th className="text-left p-4">Disease</th>
+                    <th className="text-left p-4">Cases</th>
+                    <th className="text-left p-4">Percentage</th>
+                    <th className="text-left p-4">Trend</th>
+                    <th className="text-left p-4">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {diseaseData.map((disease, index) => (
-                    <tr key={index} className="border-b border-border/50 hover:bg-muted/50">
+                  {diseaseData.map((disease) => (
+                    <tr key={disease.name} className="border-b hover:bg-muted/50">
                       <td className="p-4 font-medium">{disease.name}</td>
-                      <td className="p-4">{disease.cases}</td>
-                      <td className="p-4">{disease.percentage}%</td>
+                      <td className="p-4">{disease.cases?.toLocaleString()}</td>
+                      <td className="p-4">{disease.percentage?.toFixed(2)}%</td>
                       <td className="p-4">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
                           disease.trend === 'up' ? 'bg-destructive/10 text-destructive' :
                           disease.trend === 'down' ? 'bg-accent/10 text-accent' :
-                          'bg-muted text-muted-foreground'
+                          'bg-muted'
                         }`}>
-                          {disease.trend === 'up' ? '↗' : disease.trend === 'down' ? '↘' : '→'} {disease.trend}
+                          {disease.trend === 'up' ? '↗ Increasing' : 
+                           disease.trend === 'down' ? '↘ Decreasing' : '→ Stable'}
                         </span>
                       </td>
                       <td className="p-4">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          disease.cases > 40 ? 'bg-destructive/10 text-destructive' :
-                          disease.cases > 25 ? 'bg-yellow-100 text-yellow-800' :
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
+                          disease.status === 'High' ? 'bg-destructive/10 text-destructive' :
+                          disease.status === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
                           'bg-accent/10 text-accent'
                         }`}>
-                          {disease.cases > 40 ? 'High' : disease.cases > 25 ? 'Medium' : 'Low'}
+                          {disease.status}
                         </span>
                       </td>
                     </tr>

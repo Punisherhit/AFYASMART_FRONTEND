@@ -1,18 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
+// src/pages/TriageDashboard.tsx
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Heart, Thermometer, Activity, Clock, AlertTriangle, Users, Scale, Ruler, ArrowLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { useNavigate } from "react-router-dom";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Heart, Thermometer, Activity, Clock, AlertTriangle, Users, Scale, Ruler, ArrowLeft, User, Settings, Lock } from "lucide-react";
+import { triageApi } from '@/services/triageApi';
 
 type Priority = 'Critical' | 'Urgent' | 'Stable';
 
@@ -34,24 +33,20 @@ interface Patient {
 }
 
 export default function TriageDashboard() {
-  // State for patient counts
-  const [criticalCount, setCriticalCount] = useState(3);
-  const [urgentCount, setUrgentCount] = useState(12);
-  const [stableCount, setStableCount] = useState(28);
-  const totalCount = criticalCount + urgentCount + stableCount;
-  
-  // State for vital signs monitor
+  const navigate = useNavigate();
+  const [stats, setStats] = useState({
+    criticalCount: 0,
+    urgentCount: 0,
+    stableCount: 0,
+    totalCount: 0
+  });
   const [vitalSigns, setVitalSigns] = useState({
     heartRate: 78,
     temperature: 98.6,
     bloodPressure: "120/80"
   });
-  
-  // State for current patient being edited
   const [currentPatient, setCurrentPatient] = useState<Partial<Patient> | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  
-  // State for new patient form
   const [newPatient, setNewPatient] = useState<Partial<Patient>>({
     priority: 'Stable',
     vitals: {
@@ -63,240 +58,273 @@ export default function TriageDashboard() {
       oxygenLevel: 0
     }
   });
-
-  // State for patient queue
-  const [queue, setQueue] = useState<Patient[]>([
-    { 
-      id: "T001", 
-      name: "Sarah Wilson", 
-      priority: "Critical", 
-      symptoms: "Chest pain", 
-      addedTime: new Date(Date.now() - 5 * 60000), 
-      vitals: { 
-        heartRate: 95, 
-        temperature: 99.2, 
-        bloodPressure: "140/90",
-        weight: 68,
-        height: 165,
-        oxygenLevel: 92
-      },
-      notes: "History of heart disease"
-    },
-    { 
-      id: "T002", 
-      name: "Robert Brown", 
-      priority: "Urgent", 
-      symptoms: "Severe headache", 
-      addedTime: new Date(Date.now() - 15 * 60000), 
-      vitals: { 
-        heartRate: 82, 
-        temperature: 98.8, 
-        bloodPressure: "130/85",
-        weight: 85,
-        height: 180,
-        oxygenLevel: 97
-      } 
-    },
-    { 
-      id: "T003", 
-      name: "Emma Davis", 
-      priority: "Stable", 
-      symptoms: "Minor cut", 
-      addedTime: new Date(Date.now() - 25 * 60000), 
-      vitals: { 
-        heartRate: 72, 
-        temperature: 98.6, 
-        bloodPressure: "110/70",
-        weight: 62,
-        height: 170,
-        oxygenLevel: 98
-      } 
-    },
-    { 
-      id: "T004", 
-      name: "David Miller", 
-      priority: "Stable", 
-      symptoms: "Cold symptoms", 
-      addedTime: new Date(Date.now() - 35 * 60000), 
-      vitals: { 
-        heartRate: 68, 
-        temperature: 98.4, 
-        bloodPressure: "105/65",
-        weight: 90,
-        height: 185,
-        oxygenLevel: 99
-      } 
-    },
-  ]);
-
+  const [queue, setQueue] = useState<Patient[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const nextIdRef = useRef(5);
 
-  // Update current time every minute
+  // Fetch initial data
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000);
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const [queueResponse, statsResponse] = await Promise.all([
+          triageApi.getQueue(),
+          triageApi.getStats()
+        ]);
+        
+        setQueue(queueResponse.data.map((patient: any) => ({
+          ...patient,
+          addedTime: new Date(patient.addedTime)
+        })));
+        
+        setStats({
+          criticalCount: statsResponse.data.criticalCount,
+          urgentCount: statsResponse.data.urgentCount,
+          stableCount: statsResponse.data.stableCount,
+          totalCount: statsResponse.data.totalCount
+        });
+        
+      } catch (err) {
+        setError('Failed to fetch data. Please try again.');
+        console.error('Error fetching data:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
     
-    return () => clearInterval(timer);
+    fetchData();
+    
+    // Set up polling for real-time updates
+    const intervalId = setInterval(fetchData, 30000);
+    const timeInterval = setInterval(() => setCurrentTime(new Date()), 60000);
+    
+    return () => {
+      clearInterval(intervalId);
+      clearInterval(timeInterval);
+    };
   }, []);
 
-  // Generate random vital signs based on priority
+  // Generate vitals based on priority
   const generateVitals = (priority: Priority) => {
     if (priority === "Critical") {
       return {
-        heartRate: Math.floor(Math.random() * 40) + 100, // 100-140
-        temperature: Math.random() * 2 + 99.5, // 99.5-101.5
-        bloodPressure: `${Math.floor(Math.random() * 40) + 140}/${Math.floor(Math.random() * 20) + 90}`, // 140/90-180/110
-        weight: Math.floor(Math.random() * 50) + 50, // 50-100kg
-        height: Math.floor(Math.random() * 50) + 150, // 150-200cm
-        oxygenLevel: Math.floor(Math.random() * 15) + 85 // 85-100%
+        heartRate: Math.floor(Math.random() * 40) + 100,
+        temperature: Math.random() * 2 + 99.5,
+        bloodPressure: `${Math.floor(Math.random() * 40) + 140}/${Math.floor(Math.random() * 20) + 90}`,
+        weight: Math.floor(Math.random() * 50) + 50,
+        height: Math.floor(Math.random() * 50) + 150,
+        oxygenLevel: Math.floor(Math.random() * 15) + 85
       };
     } else if (priority === "Urgent") {
       return {
-        heartRate: Math.floor(Math.random() * 30) + 80, // 80-110
-        temperature: Math.random() * 1.5 + 98.5, // 98.5-100
-        bloodPressure: `${Math.floor(Math.random() * 30) + 120}/${Math.floor(Math.random() * 15) + 80}`, // 120/80-150/95
-        weight: Math.floor(Math.random() * 60) + 40, // 40-100kg
-        height: Math.floor(Math.random() * 60) + 140, // 140-200cm
-        oxygenLevel: Math.floor(Math.random() * 10) + 90 // 90-100%
+        heartRate: Math.floor(Math.random() * 30) + 80,
+        temperature: Math.random() * 1.5 + 98.5,
+        bloodPressure: `${Math.floor(Math.random() * 30) + 120}/${Math.floor(Math.random() * 15) + 80}`,
+        weight: Math.floor(Math.random() * 60) + 40,
+        height: Math.floor(Math.random() * 60) + 140,
+        oxygenLevel: Math.floor(Math.random() * 10) + 90
       };
     } else {
       return {
-        heartRate: Math.floor(Math.random() * 30) + 60, // 60-90
-        temperature: Math.random() * 1.5 + 97.5, // 97.5-99
-        bloodPressure: `${Math.floor(Math.random() * 20) + 100}/${Math.floor(Math.random() * 15) + 65}`, // 100/65-120/80
-        weight: Math.floor(Math.random() * 70) + 30, // 30-100kg
-        height: Math.floor(Math.random() * 70) + 130, // 130-200cm
-        oxygenLevel: Math.floor(Math.random() * 5) + 95 // 95-100%
+        heartRate: Math.floor(Math.random() * 30) + 60,
+        temperature: Math.random() * 1.5 + 97.5,
+        bloodPressure: `${Math.floor(Math.random() * 20) + 100}/${Math.floor(Math.random() * 15) + 65}`,
+        weight: Math.floor(Math.random() * 70) + 30,
+        height: Math.floor(Math.random() * 70) + 130,
+        oxygenLevel: Math.floor(Math.random() * 5) + 95
       };
     }
   };
 
-  // Add a new patient to the queue (manual or quick)
-  const addPatient = (priority: Priority, manualData?: Partial<Patient>) => {
-    const names = [
-      "James Taylor", "Olivia Garcia", "William Lee", "Sophia Martinez", 
-      "Benjamin Clark", "Isabella Rodriguez", "Lucas Hernandez", "Mia Lopez",
-      "Henry Walker", "Charlotte Perez", "Alexander Hall", "Amelia Young"
-    ];
-    
-    const symptomsMap = {
-      Critical: ["Chest pain", "Difficulty breathing", "Severe bleeding", "Unconsciousness"],
-      Urgent: ["Broken bone", "High fever", "Severe abdominal pain", "Head injury"],
-      Stable: ["Rash", "Mild fever", "Sore throat", "Minor cut"]
-    };
-
-    const newPatient: Patient = manualData ? {
-      id: `T${nextIdRef.current.toString().padStart(3, '0')}`,
-      name: manualData.name || names[Math.floor(Math.random() * names.length)],
-      priority: manualData.priority || priority,
-      symptoms: manualData.symptoms || symptomsMap[priority][Math.floor(Math.random() * symptomsMap[priority].length)],
-      addedTime: new Date(),
-      vitals: {
-        heartRate: manualData.vitals?.heartRate || generateVitals(priority).heartRate,
-        temperature: manualData.vitals?.temperature || generateVitals(priority).temperature,
-        bloodPressure: manualData.vitals?.bloodPressure || generateVitals(priority).bloodPressure,
-        weight: manualData.vitals?.weight || generateVitals(priority).weight,
-        height: manualData.vitals?.height || generateVitals(priority).height,
-        oxygenLevel: manualData.vitals?.oxygenLevel || generateVitals(priority).oxygenLevel
-      },
-      notes: manualData.notes
-    } : {
-      id: `T${nextIdRef.current.toString().padStart(3, '0')}`,
-      name: names[Math.floor(Math.random() * names.length)],
-      priority,
-      symptoms: symptomsMap[priority][Math.floor(Math.random() * symptomsMap[priority].length)],
-      addedTime: new Date(),
-      vitals: generateVitals(priority)
-    };
-    
-    setQueue([...queue, newPatient]);
-    
-    // Update counts
-    if (priority === "Critical") setCriticalCount(c => c + 1);
-    else if (priority === "Urgent") setUrgentCount(c => c + 1);
-    else setStableCount(c => c + 1);
-    
-    nextIdRef.current++;
+  // Add patient to queue
+  const addPatient = async (priority: Priority, manualData?: Partial<Patient>) => {
+    try {
+      const patientData = manualData || {
+        priority,
+        name: `Patient ${Math.floor(Math.random() * 1000)}`,
+        symptoms: priority === 'Critical' ? 'Emergency condition' : 
+                 priority === 'Urgent' ? 'Urgent condition' : 'Routine check',
+        vitals: generateVitals(priority)
+      };
+      
+      const response = await triageApi.addPatient(patientData);
+      
+      setQueue(prevQueue => [...prevQueue, {
+        ...response.data,
+        addedTime: new Date(response.data.addedTime)
+      }]);
+      
+      setStats(prev => ({
+        ...prev,
+        [`${priority.toLowerCase()}Count`]: prev[`${priority.toLowerCase()}Count`] + 1,
+        totalCount: prev.totalCount + 1
+      }));
+      
+      return response.data;
+    } catch (err) {
+      console.error('Error adding patient:', err);
+      throw err;
+    }
   };
 
   // Handle manual patient addition
-  const handleAddPatient = () => {
+  const handleAddPatient = async () => {
     if (!newPatient.name || !newPatient.symptoms) return;
-    addPatient(newPatient.priority || 'Stable', newPatient);
     
-    // Reset form
-    setNewPatient({
-      priority: 'Stable',
-      vitals: {
-        heartRate: 0,
-        temperature: 0,
-        bloodPressure: '',
-        weight: 0,
-        height: 0,
-        oxygenLevel: 0
-      }
-    });
+    try {
+      await addPatient(newPatient.priority || 'Stable', newPatient);
+      setNewPatient({
+        priority: 'Stable',
+        vitals: {
+          heartRate: 0,
+          temperature: 0,
+          bloodPressure: '',
+          weight: 0,
+          height: 0,
+          oxygenLevel: 0
+        }
+      });
+    } catch (err) {
+      console.error('Failed to add patient:', err);
+    }
   };
 
-  // Assess a patient (remove from queue)
-  const assessPatient = (id: string) => {
-    const patient = queue.find(p => p.id === id);
-    if (!patient) return;
-    
-    setQueue(queue.filter(p => p.id !== id));
-    
-    // Update counts
-    if (patient.priority === "Critical") setCriticalCount(c => c - 1);
-    else if (patient.priority === "Urgent") setUrgentCount(c => c - 1);
-    else setStableCount(c => c - 1);
+  // Assess patient (remove from queue)
+  const assessPatient = async (id: string) => {
+    try {
+      await triageApi.assessPatient(id);
+      const patient = queue.find(p => p.id === id);
+      if (!patient) return;
+      
+      setQueue(queue.filter(p => p.id !== id));
+      setStats(prev => ({
+        ...prev,
+        [`${patient.priority.toLowerCase()}Count`]: prev[`${patient.priority.toLowerCase()}Count`] - 1,
+        totalCount: prev.totalCount - 1
+      }));
+    } catch (err) {
+      console.error('Error assessing patient:', err);
+    }
   };
 
-  // Edit patient data
-  const editPatient = (patient: Patient) => {
-    setCurrentPatient(patient);
-    setIsEditing(true);
-  };
-
-  // Save edited patient data
-  const saveEditedPatient = () => {
+  // Save edited patient
+  const saveEditedPatient = async () => {
     if (!currentPatient) return;
     
-    setQueue(queue.map(p => 
-      p.id === currentPatient.id ? { ...p, ...currentPatient } as Patient : p
-    ));
-    
-    setIsEditing(false);
-    setCurrentPatient(null);
+    try {
+      const response = await triageApi.updatePatient(currentPatient.id!, currentPatient);
+      setQueue(queue.map(p => 
+        p.id === currentPatient.id ? { 
+          ...p, 
+          ...response.data,
+          addedTime: new Date(response.data.addedTime)
+        } : p
+      ));
+      setIsEditing(false);
+      setCurrentPatient(null);
+    } catch (err) {
+      console.error('Error updating patient:', err);
+    }
   };
 
-  // Calculate waiting time in minutes
+  // Helper functions
   const getWaitingTime = (addedTime: Date) => {
     const diff = (currentTime.getTime() - addedTime.getTime()) / 60000;
     return diff < 1 ? "just now" : `${Math.floor(diff)} min`;
   };
 
-  // Calculate BMI
   const calculateBMI = (weight: number, height: number) => {
     if (weight <= 0 || height <= 0) return 'N/A';
     const heightInMeters = height / 100;
-    const bmi = (weight / (heightInMeters * heightInMeters)).toFixed(1);
-    return bmi;
+    return (weight / (heightInMeters * heightInMeters)).toFixed(1);
   };
 
-  // Generate random vital signs for the monitor
   const generateRandomVitals = () => {
     setVitalSigns({
-      heartRate: Math.floor(Math.random() * 40) + 60, // 60-100
-      temperature: Math.random() * 3 + 97.5, // 97.5-100.5
-      bloodPressure: `${Math.floor(Math.random() * 40) + 100}/${Math.floor(Math.random() * 20) + 70}` // 100/70-140/90
+      heartRate: Math.floor(Math.random() * 40) + 60,
+      temperature: Math.random() * 3 + 97.5,
+      bloodPressure: `${Math.floor(Math.random() * 40) + 100}/${Math.floor(Math.random() * 20) + 70}`
     });
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('afya-token');
+    localStorage.removeItem('afya-user');
+    navigate('/');
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p>Loading triage dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center text-red-500">
+          <AlertTriangle className="h-12 w-12 mx-auto mb-4" />
+          <p className="text-xl font-medium mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-secondary/20 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background">
+      {/* Top Navigation */}
+      <div className="border-b">
+        <div className="flex h-16 items-center px-6 justify-between">
+          <div className="flex items-center gap-2">
+            <Heart className="h-6 w-6 text-primary" />
+            <span className="font-bold">AfyaConnect</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" className="flex items-center gap-2" onClick={() => navigate('/')}>
+              <ArrowLeft className="h-4 w-4" />
+              Back to Home
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="gap-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src="/avatars/nurse.png" />
+                    <AvatarFallback>N</AvatarFallback>
+                  </Avatar>
+                  <span>Nurse</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem>
+                  <User className="mr-2 h-4 w-4" />
+                  <span>Profile</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Lock className="mr-2 h-4 w-4" />
+                  <span>Privacy</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout}>
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  <span>Logout</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" className="rounded-full">
@@ -457,7 +485,7 @@ export default function TriageDashboard() {
               <AlertTriangle className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-500">{criticalCount}</div>
+              <div className="text-2xl font-bold text-red-500">{stats.criticalCount}</div>
               <p className="text-xs text-muted-foreground">Immediate attention</p>
             </CardContent>
           </Card>
@@ -468,7 +496,7 @@ export default function TriageDashboard() {
               <Clock className="h-4 w-4 text-yellow-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-yellow-500">{urgentCount}</div>
+              <div className="text-2xl font-bold text-yellow-500">{stats.urgentCount}</div>
               <p className="text-xs text-muted-foreground">Within 30 minutes</p>
             </CardContent>
           </Card>
@@ -479,7 +507,7 @@ export default function TriageDashboard() {
               <Heart className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-500">{stableCount}</div>
+              <div className="text-2xl font-bold text-green-500">{stats.stableCount}</div>
               <p className="text-xs text-muted-foreground">Standard care</p>
             </CardContent>
           </Card>
@@ -490,7 +518,7 @@ export default function TriageDashboard() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{totalCount}</div>
+              <div className="text-2xl font-bold">{stats.totalCount}</div>
               <p className="text-xs text-muted-foreground">In triage queue</p>
             </CardContent>
           </Card>
@@ -655,7 +683,10 @@ export default function TriageDashboard() {
                         <Button 
                           size="sm" 
                           variant="outline"
-                          onClick={() => editPatient(patient)}
+                          onClick={() => {
+                            setCurrentPatient(patient);
+                            setIsEditing(true);
+                          }}
                         >
                           Edit
                         </Button>

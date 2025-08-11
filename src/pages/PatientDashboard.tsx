@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useNavigate } from "react-router-dom";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Calendar,
@@ -28,57 +29,153 @@ import {
   Mail,
   Home,
   Briefcase,
-  Shield
+  Shield,
+  Loader2
 } from "lucide-react";
+
+const BACKEND_URL = "http://localhost:5000";
+
+interface Address {
+  street: string;
+  city: string;
+  county: string;
+  postalCode: string;
+}
+
+interface EmergencyContact {
+  name: string;
+  relationship: string;
+  phone: string;
+  email: string;
+}
+
+interface NextOfKin {
+  name: string;
+  relationship: string;
+  phone: string;
+  address: string;
+}
+
+interface Insurance {
+  provider: string;
+  policyNumber: string;
+  validUntil: string;
+}
+
+interface PatientProfile {
+  id?: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  dateOfBirth: string;
+  bloodType: string;
+  gender: string;
+  nationalId: string;
+  address: Address;
+  emergencyContact: EmergencyContact;
+  nextOfKin: NextOfKin;
+  occupation: string;
+  employer: string;
+  insurance: Insurance;
+  allergies: string[];
+  chronicConditions: string[];
+  height: string;
+  weight: string;
+}
+
+interface Appointment {
+  id: string;
+  doctor: string;
+  doctorId: string;
+  department: string;
+  date: string;
+  time: string;
+  status: string;
+  reason: string;
+  type: string;
+}
+
+interface MedicalRecord {
+  id: string;
+  date: string;
+  doctor: string;
+  type: string;
+  description: string;
+  prescription?: string;
+  details?: string;
+}
+
+interface BillingInfo {
+  id: string;
+  date: string;
+  service: string;
+  amount: number;
+  status: string;
+  paymentMethod: string;
+}
+
+interface Doctor {
+  id: string;
+  name: string;
+  specialization: string;
+  department: string;
+}
 
 const PatientDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
-  const [editingAppointment, setEditingAppointment] = useState(null);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  // Patient Profile State
-  const [patientProfile, setPatientProfile] = useState({
-    fullName: "John Doe",
-    email: "john.doe@email.com",
-    phone: "+254 700 123 456",
-    dateOfBirth: "1990-01-15",
-    bloodType: "O+",
-    gender: "Male",
-    nationalId: "12345678",
+  const [patientProfile, setPatientProfile] = useState<PatientProfile>({
+    fullName: "",
+    email: "",
+    phone: "",
+    dateOfBirth: "",
+    bloodType: "",
+    gender: "",
+    nationalId: "",
     address: {
-      street: "123 Main Street",
-      city: "Nairobi",
-      county: "Nairobi County",
-      postalCode: "00100"
+      street: "",
+      city: "",
+      county: "",
+      postalCode: ""
     },
     emergencyContact: {
-      name: "Jane Doe",
-      relationship: "Wife",
-      phone: "+254 700 123 457",
-      email: "jane.doe@email.com"
+      name: "",
+      relationship: "",
+      phone: "",
+      email: ""
     },
     nextOfKin: {
-      name: "Robert Doe",
-      relationship: "Father",
-      phone: "+254 700 123 458",
-      address: "456 Oak Avenue, Nairobi"
+      name: "",
+      relationship: "",
+      phone: "",
+      address: ""
     },
-    occupation: "Software Engineer",
-    employer: "Tech Solutions Ltd",
+    occupation: "",
+    employer: "",
     insurance: {
-      provider: "AAR Insurance",
-      policyNumber: "AAR123456789",
-      validUntil: "2024-12-31"
+      provider: "",
+      policyNumber: "",
+      validUntil: ""
     },
-    allergies: ["Penicillin", "Shellfish"],
-    chronicConditions: ["Hypertension"],
-    height: "175 cm",
-    weight: "70 kg"
+    allergies: [],
+    chronicConditions: [],
+    height: "",
+    weight: ""
   });
 
-  const [tempProfile, setTempProfile] = useState(patientProfile);
-
+  const [tempProfile, setTempProfile] = useState<PatientProfile>({...patientProfile});
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
+  const [billingInfo, setBillingInfo] = useState<BillingInfo[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [availableDoctors, setAvailableDoctors] = useState<Doctor[]>([]);
+  
   const [appointmentForm, setAppointmentForm] = useState({
     doctor: "",
     department: "",
@@ -88,125 +185,165 @@ const PatientDashboard = () => {
     type: "outpatient",
   });
 
-  const departments = ["Cardiology", "Neurology", "Pediatrics", "Orthopedics", "Oncology", "Gastroenterology", "Emergency", "Radiology", "Lab"];
-  
-  const availableDoctors = [
-    { id: 1, name: "Dr. Sarah Johnson", specialization: "Cardiology", department: "Cardiology" },
-    { id: 2, name: "Dr. Michael Chen", specialization: "Neurology", department: "Neurology" },
-    { id: 3, name: "Dr. Emily Brown", specialization: "Pediatrics", department: "Pediatrics" },
-    { id: 4, name: "Dr. James Wilson", specialization: "Orthopedics", department: "Orthopedics" },
-    { id: 5, name: "Dr. Lisa Wong", specialization: "Oncology", department: "Oncology" },
-    { id: 6, name: "Dr. David Kim", specialization: "Gastroenterology", department: "Gastroenterology" },
-  ];
-
-  const [appointments, setAppointments] = useState([
-    {
-      id: 1,
-      doctor: "Dr. Sarah Johnson",
-      department: "Cardiology",
-      date: "2024-01-20",
-      time: "10:00 AM",
-      status: "Scheduled",
-      reason: "Regular checkup",
-    },
-    {
-      id: 2,
-      doctor: "Dr. Michael Chen",
-      department: "Neurology",
-      date: "2024-01-15",
-      time: "2:00 PM",
-      status: "Completed",
-      reason: "Headache consultation",
-    },
-  ]);
-
-  const [medicalRecords, setMedicalRecords] = useState([
-    {
-      id: 1,
-      date: "2024-01-15",
-      doctor: "Dr. Michael Chen",
-      type: "Diagnosis",
-      description: "Tension headache - prescribed medication",
-      prescription: "Ibuprofen 400mg, twice daily",
-    },
-    {
-      id: 2,
-      date: "2024-01-10",
-      doctor: "Dr. Sarah Johnson",
-      type: "Lab Result",
-      description: "Blood work results - all normal",
-      details: "Cholesterol: 180mg/dL, Blood Sugar: 95mg/dL",
-    },
-  ]);
-
-  const billingInfo = [
-    {
-      id: 1,
-      date: "2024-01-15",
-      service: "Consultation - Neurology",
-      amount: 2500,
-      status: "Paid",
-      paymentMethod: "Card",
-    },
-    {
-      id: 2,
-      date: "2024-01-10",
-      service: "Lab Tests - Blood Work",
-      amount: 1800,
-      status: "Paid",
-      paymentMethod: "MPESA",
-    },
-  ];
-
-  const handleBookAppointment = async (e) => {
-    e.preventDefault();
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('afya-token');
     
-    const appointmentDate = new Date(appointmentForm.date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
-    
-    // Check if appointment date is in the past
-    if (appointmentDate < today) {
-      alert("Cannot book appointments for past dates. Please select a future date.");
-      return;
-    }
-    
-    const hasAppointmentOnDate = appointments.some(
-      (apt) => apt.date === appointmentForm.date && apt.status !== "Cancelled"
-    );
-
-    if (hasAppointmentOnDate) {
-      alert("You already have an appointment scheduled for this date. Please choose another date.");
-      return;
+    if (!token) {
+      console.error('No authentication token found');
+      localStorage.removeItem('afya-user');
+      navigate('/login');
+      throw new Error('Authentication required');
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    const selectedDoctor = availableDoctors.find((doc) => doc.id.toString() === appointmentForm.doctor);
-    const newAppointment = {
-      id: Date.now(),
-      doctor: selectedDoctor?.name || "",
-      department: appointmentForm.department,
-      date: appointmentForm.date,
-      time: appointmentForm.time,
-      status: "Scheduled",
-      reason: appointmentForm.reason,
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
     };
-
-    setAppointments((prev) => [newAppointment, ...prev]);
-    setIsBookingDialogOpen(false);
-    setAppointmentForm({
-      doctor: "",
-      department: "",
-      date: "",
-      time: "",
-      reason: "",
-      type: "outpatient",
-    });
   };
 
-  const handleSaveProfile = () => {
-    setPatientProfile(tempProfile);
-    setEditingProfile(false);
+  const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          ...getAuthHeaders(),
+          ...options.headers
+        }
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem('afya-token');
+        localStorage.removeItem('afya-user');
+        navigate('/login');
+        throw new Error('Session expired. Please login again.');
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Request failed');
+      }
+
+      return response;
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
+    }
+  };
+
+  useEffect(() => {
+    const fetchPatientData = async () => {
+      try {
+        setIsLoading(true);
+        
+        const token = localStorage.getItem('afya-token');
+        if (!token) {
+          navigate('/login');
+          return;
+        }
+
+        const [profileRes, appointmentsRes, recordsRes, billingRes, deptRes, doctorsRes] = await Promise.all([
+          fetchWithAuth(`${BACKEND_URL}/api/v1/patient/`),
+          fetchWithAuth(`${BACKEND_URL}/api/v1/patient/appointments`),
+          fetchWithAuth(`${BACKEND_URL}/api/v1/patient/medical-records`),
+          fetchWithAuth(`${BACKEND_URL}/api/v1/patient/billing`),
+          fetchWithAuth(`${BACKEND_URL}/api/v1/departments`),
+          fetchWithAuth(`${BACKEND_URL}/api/v1/doctors`)
+        ]);
+
+        const [
+          profileData,
+          appointmentsData,
+          recordsData,
+          billingData,
+          deptData,
+          doctorsData
+        ] = await Promise.all([
+          profileRes.json(),
+          appointmentsRes.json(),
+          recordsRes.json(),
+          billingRes.json(),
+          deptRes.json(),
+          doctorsRes.json()
+        ]);
+
+        setPatientProfile(profileData);
+        setTempProfile(profileData);
+        setAppointments(appointmentsData);
+        setMedicalRecords(recordsData);
+        setBillingInfo(billingData);
+        setDepartments(deptData);
+        setAvailableDoctors(doctorsData);
+
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Failed to fetch data";
+        setError(errorMessage);
+        
+        if (errorMessage.includes('Session expired') || errorMessage.includes('Unauthorized')) {
+          navigate('/login');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPatientData();
+  }, [navigate]);
+
+  const handleBookAppointment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const selectedDoctor = availableDoctors.find(doc => doc.id === appointmentForm.doctor);
+      if (!selectedDoctor) throw new Error("Please select a doctor");
+
+      const response = await fetchWithAuth(`${BACKEND_URL}/api/v1/appointments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          doctorId: appointmentForm.doctor,
+          department: appointmentForm.department,
+          date: appointmentForm.date,
+          time: appointmentForm.time,
+          reason: appointmentForm.reason,
+          type: appointmentForm.type,
+          patientId: patientProfile.id
+        })
+      });
+
+      const newAppointment = await response.json();
+      setAppointments(prev => [newAppointment, ...prev]);
+      
+      setIsBookingDialogOpen(false);
+      setAppointmentForm({
+        doctor: "",
+        department: "",
+        date: "",
+        time: "",
+        reason: "",
+        type: "outpatient",
+      });
+      
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to book appointment";
+      alert(errorMessage);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      const response = await fetchWithAuth(`${BACKEND_URL}/api/v1/patient/profile`, {
+        method: 'PUT',
+        body: JSON.stringify(tempProfile)
+      });
+
+      const updatedProfile = await response.json();
+      setPatientProfile(updatedProfile);
+      setTempProfile(updatedProfile);
+      setEditingProfile(false);
+      
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to update profile";
+      alert(errorMessage);
+    }
   };
 
   const handleCancelProfileEdit = () => {
@@ -214,28 +351,72 @@ const PatientDashboard = () => {
     setEditingProfile(false);
   };
 
-  const handleEditAppointment = (appointment) => {
+  const handleEditAppointment = (appointment: Appointment) => {
     setEditingAppointment({ ...appointment });
   };
 
-  const handleSaveAppointment = () => {
-    const appointmentDate = new Date(editingAppointment.date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
-    
-    // Check if appointment date is in the past
-    if (appointmentDate < today) {
-      alert("Cannot schedule appointments for past dates. Please select a future date.");
-      return;
+  const handleSaveAppointment = async () => {
+    if (!editingAppointment) return;
+
+    try {
+      const response = await fetchWithAuth(`${BACKEND_URL}/api/v1/appointments/${editingAppointment.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(editingAppointment)
+      });
+
+      const updatedAppointment = await response.json();
+      setAppointments(prev => 
+        prev.map(apt => 
+          apt.id === updatedAppointment.id ? updatedAppointment : apt
+        )
+      );
+      setEditingAppointment(null);
+      
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to update appointment";
+      alert(errorMessage);
     }
-    
-    setAppointments(prev => 
-      prev.map(apt => 
-        apt.id === editingAppointment.id ? editingAppointment : apt
-      )
-    );
+  };
+
+  const handleCancelAppointmentEdit = () => {
     setEditingAppointment(null);
   };
+
+  const handleLogout = () => {
+    localStorage.removeItem('afya-token');
+    localStorage.removeItem('afya-user');
+    
+    fetch(`${BACKEND_URL}/api/v1/auth/logout`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    }).catch(console.error);
+    
+    navigate('/login');
+  };
+
+  const nextAppointment = appointments.find(apt => 
+    new Date(apt.date) >= new Date() && apt.status === "Scheduled"
+  );
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="text-center p-8">
+          <CardTitle>Error</CardTitle>
+          <CardDescription className="text-destructive mb-4">{error}</CardDescription>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -243,7 +424,7 @@ const PatientDashboard = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="flex items-center gap-2" onClick={() => navigate(-1)}>
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
@@ -252,122 +433,127 @@ const PatientDashboard = () => {
               <p className="text-muted-foreground">Welcome back, {patientProfile.fullName}</p>
             </div>
           </div>
-          <Dialog open={isBookingDialogOpen} onOpenChange={setIsBookingDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Book Appointment
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Book New Appointment</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleBookAppointment} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Department</Label>
-                  <Select
-                    value={appointmentForm.department}
-                    onValueChange={(value) => setAppointmentForm((prev) => ({ ...prev, department: value, doctor: "" }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {departments.map((dept) => (
-                        <SelectItem key={dept} value={dept}>
-                          {dept}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Doctor</Label>
-                  <Select
-                    value={appointmentForm.doctor}
-                    onValueChange={(value) => setAppointmentForm((prev) => ({ ...prev, doctor: value }))}
-                    disabled={!appointmentForm.department}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select doctor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableDoctors
-                        .filter((doc) => doc.department === appointmentForm.department)
-                        .map((doctor) => (
-                          <SelectItem key={doctor.id} value={doctor.id.toString()}>
-                            {doctor.name} - {doctor.specialization}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
+          <div className="flex items-center gap-4">
+            <Dialog open={isBookingDialogOpen} onOpenChange={setIsBookingDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Book Appointment
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Book New Appointment</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleBookAppointment} className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Date</Label>
-                    <Input
-                      type="date"
-                      value={appointmentForm.date}
-                      onChange={(e) => setAppointmentForm((prev) => ({ ...prev, date: e.target.value }))}
-                      min={new Date().toISOString().split("T")[0]}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Time</Label>
+                    <Label>Department</Label>
                     <Select
-                      value={appointmentForm.time}
-                      onValueChange={(value) => setAppointmentForm((prev) => ({ ...prev, time: value }))}
+                      value={appointmentForm.department}
+                      onValueChange={(value) => setAppointmentForm(prev => ({ ...prev, department: value, doctor: "" }))}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select time" />
+                        <SelectValue placeholder="Select department" />
                       </SelectTrigger>
                       <SelectContent>
-                        {["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"].map((time) => (
-                          <SelectItem key={time} value={time}>
-                            {time}
+                        {departments.map((dept) => (
+                          <SelectItem key={dept} value={dept}>
+                            {dept}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label>Type</Label>
-                  <Select
-                    value={appointmentForm.type}
-                    onValueChange={(value) => setAppointmentForm((prev) => ({ ...prev, type: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="outpatient">Outpatient</SelectItem>
-                      <SelectItem value="inpatient">Inpatient</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <div className="space-y-2">
+                    <Label>Doctor</Label>
+                    <Select
+                      value={appointmentForm.doctor}
+                      onValueChange={(value) => setAppointmentForm(prev => ({ ...prev, doctor: value }))}
+                      disabled={!appointmentForm.department}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select doctor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableDoctors
+                          .filter((doc) => doc.department === appointmentForm.department)
+                          .map((doctor) => (
+                            <SelectItem key={doctor.id} value={doctor.id}>
+                              {doctor.name} - {doctor.specialization}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label>Reason for Visit</Label>
-                  <Textarea
-                    placeholder="Describe your symptoms or reason for visit"
-                    value={appointmentForm.reason}
-                    onChange={(e) => setAppointmentForm((prev) => ({ ...prev, reason: e.target.value }))}
-                    rows={3}
-                  />
-                </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2">
+                      <Label>Date</Label>
+                      <Input
+                        type="date"
+                        value={appointmentForm.date}
+                        onChange={(e) => setAppointmentForm(prev => ({ ...prev, date: e.target.value }))}
+                        min={new Date().toISOString().split("T")[0]}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Time</Label>
+                      <Select
+                        value={appointmentForm.time}
+                        onValueChange={(value) => setAppointmentForm(prev => ({ ...prev, time: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"].map((time) => (
+                            <SelectItem key={time} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
 
-                <Button type="submit" className="w-full">
-                  Book Appointment
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <div className="space-y-2">
+                    <Label>Type</Label>
+                    <Select
+                      value={appointmentForm.type}
+                      onValueChange={(value) => setAppointmentForm(prev => ({ ...prev, type: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="outpatient">Outpatient</SelectItem>
+                        <SelectItem value="inpatient">Inpatient</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Reason for Visit</Label>
+                    <Textarea
+                      placeholder="Describe your symptoms or reason for visit"
+                      value={appointmentForm.reason}
+                      onChange={(e) => setAppointmentForm(prev => ({ ...prev, reason: e.target.value }))}
+                      rows={3}
+                    />
+                  </div>
+
+                  <Button type="submit" className="w-full">
+                    Book Appointment
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+            <Button variant="outline" onClick={handleLogout} className="flex items-center gap-2">
+              Logout
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -378,8 +564,12 @@ const PatientDashboard = () => {
               <Calendar className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">Jan 20</div>
-              <p className="text-xs text-muted-foreground">Dr. Sarah Johnson</p>
+              <div className="text-2xl font-bold">
+                {nextAppointment ? new Date(nextAppointment.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : "None"}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {nextAppointment ? nextAppointment.doctor : "No upcoming appointments"}
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -398,7 +588,9 @@ const PatientDashboard = () => {
               <Activity className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">3</div>
+              <div className="text-2xl font-bold">
+                {medicalRecords.filter(record => record.prescription).length}
+              </div>
               <p className="text-xs text-muted-foreground">Current medications</p>
             </CardContent>
           </Card>
@@ -408,8 +600,12 @@ const PatientDashboard = () => {
               <CreditCard className="h-4 w-4 text-accent" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">KSh 0</div>
-              <p className="text-xs text-muted-foreground">All paid up</p>
+              <div className="text-2xl font-bold">
+                KSh {billingInfo.filter(bill => bill.status !== "Paid").reduce((sum, bill) => sum + bill.amount, 0).toLocaleString()}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {billingInfo.some(bill => bill.status !== "Paid") ? "Payment due" : "All paid up"}
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -434,7 +630,7 @@ const PatientDashboard = () => {
                 <CardContent>
                   <div className="space-y-4">
                     {appointments
-                      .filter((apt) => apt.status === "Scheduled")
+                      .filter(apt => new Date(apt.date) >= new Date() && apt.status === "Scheduled")
                       .slice(0, 2)
                       .map((appointment) => (
                         <div key={appointment.id} className="flex items-center justify-between p-3 border rounded-lg">
@@ -443,11 +639,20 @@ const PatientDashboard = () => {
                             <p className="text-sm text-muted-foreground">{appointment.department}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-medium">{appointment.date}</p>
+                            <p className="text-sm font-medium">
+                              {new Date(appointment.date).toLocaleDateString('en-US', { 
+                                year: 'numeric', 
+                                month: 'short', 
+                                day: 'numeric' 
+                              })}
+                            </p>
                             <p className="text-sm text-muted-foreground">{appointment.time}</p>
                           </div>
                         </div>
                       ))}
+                    {appointments.filter(apt => new Date(apt.date) >= new Date() && apt.status === "Scheduled").length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">No upcoming appointments</p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -466,11 +671,20 @@ const PatientDashboard = () => {
                           <p className="text-sm text-muted-foreground">{record.doctor}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-medium">{record.date}</p>
+                          <p className="text-sm font-medium">
+                            {new Date(record.date).toLocaleDateString('en-US', { 
+                              year: 'numeric', 
+                              month: 'short', 
+                              day: 'numeric' 
+                            })}
+                          </p>
                           <Badge variant="secondary">New</Badge>
                         </div>
                       </div>
                     ))}
+                    {medicalRecords.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">No recent medical records</p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -488,74 +702,84 @@ const PatientDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {appointments.map((appointment) => (
-                    <div key={appointment.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      {editingAppointment?.id === appointment.id ? (
-                        <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div>
-                            <Label className="text-xs">Date</Label>
-                            <Input
-                              type="date"
-                              value={editingAppointment.date}
-                              onChange={(e) => setEditingAppointment({...editingAppointment, date: e.target.value})}
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Time</Label>
-                            <Input
-                              value={editingAppointment.time}
-                              onChange={(e) => setEditingAppointment({...editingAppointment, time: e.target.value})}
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Reason</Label>
-                            <Input
-                              value={editingAppointment.reason}
-                              onChange={(e) => setEditingAppointment({...editingAppointment, reason: e.target.value})}
-                            />
-                          </div>
-                          <div className="flex gap-2 mt-2">
-                            <Button size="sm" onClick={handleSaveAppointment}>
-                              <Save className="h-4 w-4 mr-1" />
-                              Save
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => setEditingAppointment(null)}>
-                              <X className="h-4 w-4 mr-1" />
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                              <Stethoscope className="h-6 w-6 text-primary" />
+                  {appointments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">No appointments found</p>
+                  ) : (
+                    appointments.map((appointment) => (
+                      <div key={appointment.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        {editingAppointment?.id === appointment.id ? (
+                          <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                              <Label className="text-xs">Date</Label>
+                              <Input
+                                type="date"
+                                value={editingAppointment.date}
+                                onChange={(e) => setEditingAppointment({...editingAppointment, date: e.target.value})}
+                              />
                             </div>
                             <div>
-                              <h3 className="font-medium">{appointment.doctor}</h3>
-                              <p className="text-sm text-muted-foreground">
-                                {appointment.department} • {appointment.date} • {appointment.time}
-                              </p>
-                              <p className="text-xs text-muted-foreground">{appointment.reason}</p>
+                              <Label className="text-xs">Time</Label>
+                              <Input
+                                value={editingAppointment.time}
+                                onChange={(e) => setEditingAppointment({...editingAppointment, time: e.target.value})}
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Reason</Label>
+                              <Input
+                                value={editingAppointment.reason}
+                                onChange={(e) => setEditingAppointment({...editingAppointment, reason: e.target.value})}
+                              />
+                            </div>
+                            <div className="flex gap-2 mt-2">
+                              <Button size="sm" onClick={handleSaveAppointment}>
+                                <Save className="h-4 w-4 mr-1" />
+                                Save
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={handleCancelAppointmentEdit}>
+                                <X className="h-4 w-4 mr-1" />
+                                Cancel
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={appointment.status === "Completed" ? "outline" : "secondary"}>
-                              {appointment.status}
-                            </Badge>
-                            <Button variant="outline" size="sm" onClick={() => handleEditAppointment(appointment)}>
-                              <Edit className="h-4 w-4 mr-1" />
-                              Edit
-                            </Button>
-                            <Button variant="outline" size="sm">
-                              <Eye className="h-4 w-4 mr-1" />
-                              View
-                            </Button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                                <Stethoscope className="h-6 w-6 text-primary" />
+                              </div>
+                              <div>
+                                <h3 className="font-medium">{appointment.doctor}</h3>
+                                <p className="text-sm text-muted-foreground">
+                                  {appointment.department} • {new Date(appointment.date).toLocaleDateString()} • {appointment.time}
+                                </p>
+                                <p className="text-xs text-muted-foreground">{appointment.reason}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={appointment.status === "Completed" ? "outline" : "secondary"}>
+                                {appointment.status}
+                              </Badge>
+                              {appointment.status === "Scheduled" && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleEditAppointment(appointment)}
+                                >
+                                  <Edit className="h-4 w-4 mr-1" />
+                                  Edit
+                                </Button>
+                              )}
+                              <Button variant="outline" size="sm">
+                                <Eye className="h-4 w-4 mr-1" />
+                                View
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -572,37 +796,43 @@ const PatientDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {medicalRecords.map((record) => (
-                    <div key={record.id} className="p-4 border rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-medium">{record.type}</h3>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground">{record.date}</span>
-                          <Badge variant="outline" className="text-xs">
-                            Doctor Only
-                          </Badge>
+                  {medicalRecords.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">No medical records found</p>
+                  ) : (
+                    medicalRecords.map((record) => (
+                      <div key={record.id} className="p-4 border rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-medium">{record.type}</h3>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">
+                              {new Date(record.date).toLocaleDateString()}
+                            </span>
+                            <Badge variant="outline" className="text-xs">
+                              Doctor Only
+                            </Badge>
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">{record.doctor}</p>
+                        <p className="text-sm mb-2">{record.description}</p>
+                        {record.prescription && (
+                          <div className="bg-accent/10 p-2 rounded text-sm">
+                            <span className="font-medium">Prescription:</span> {record.prescription}
+                          </div>
+                        )}
+                        {record.details && (
+                          <div className="bg-primary/10 p-2 rounded text-sm">
+                            <span className="font-medium">Details:</span> {record.details}
+                          </div>
+                        )}
+                        <div className="mt-3 pt-3 border-t border-muted">
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Shield className="h-3 w-3" />
+                            Medical records can only be edited by healthcare professionals
+                          </p>
                         </div>
                       </div>
-                      <p className="text-sm text-muted-foreground mb-2">{record.doctor}</p>
-                      <p className="text-sm mb-2">{record.description}</p>
-                      {record.prescription && (
-                        <div className="bg-accent/10 p-2 rounded text-sm">
-                          <span className="font-medium">Prescription:</span> {record.prescription}
-                        </div>
-                      )}
-                      {record.details && (
-                        <div className="bg-primary/10 p-2 rounded text-sm">
-                          <span className="font-medium">Details:</span> {record.details}
-                        </div>
-                      )}
-                      <div className="mt-3 pt-3 border-t border-muted">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Shield className="h-3 w-3" />
-                          Medical records can only be edited by healthcare professionals
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -619,19 +849,25 @@ const PatientDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {billingInfo.map((bill) => (
-                    <div key={bill.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div>
-                        <h3 className="font-medium">{bill.service}</h3>
-                        <p className="text-sm text-muted-foreground">{bill.date}</p>
-                        <p className="text-sm text-muted-foreground">Payment: {bill.paymentMethod}</p>
+                  {billingInfo.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">No billing records found</p>
+                  ) : (
+                    billingInfo.map((bill) => (
+                      <div key={bill.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <h3 className="font-medium">{bill.service}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(bill.date).toLocaleDateString()}
+                          </p>
+                          <p className="text-sm text-muted-foreground">Payment: {bill.paymentMethod}</p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold">KSh {bill.amount.toLocaleString()}</div>
+                          <Badge variant={bill.status === "Paid" ? "default" : "destructive"}>{bill.status}</Badge>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold">KSh {bill.amount.toLocaleString()}</div>
-                        <Badge variant={bill.status === "Paid" ? "default" : "destructive"}>{bill.status}</Badge>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>

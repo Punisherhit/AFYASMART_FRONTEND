@@ -22,10 +22,11 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
+import axios from "axios";
 
 // Types for our data
 type Doctor = {
-  id: number;
+  _id: string;
   name: string;
   specialization: string;
   department: string;
@@ -38,7 +39,7 @@ type Doctor = {
 };
 
 type Patient = {
-  id: number;
+  _id: string;
   name: string;
   age: number;
   phone: string;
@@ -51,7 +52,7 @@ type Patient = {
 };
 
 type Department = {
-  id: number;
+  _id: string;
   name: string;
   assignedDoctor: string;
   status: "Active" | "Inactive";
@@ -59,7 +60,7 @@ type Department = {
 };
 
 type User = {
-  id: number;
+  _id: string;
   name: string;
   email: string;
   role: "Admin" | "Doctor" | "Reception" | "Lab" | "Pharmacy";
@@ -68,7 +69,7 @@ type User = {
 };
 
 type Appointment = {
-  id: number;
+  _id: string;
   patientName: string;
   doctorName: string;
   date: string;
@@ -77,13 +78,15 @@ type Appointment = {
   notes: string;
 };
 
+const API_BASE_URL = "http://localhost:5000/api/v1";
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("overview");
   const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
   const [registerType, setRegisterType] = useState<"doctor" | "patient" | "department" | "user">("doctor");
-  const [isEditing, setIsEditing] = useState<{type: string, id: number} | null>(null);
+  const [isEditing, setIsEditing] = useState<{type: string, id: string} | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [notifications, setNotifications] = useState([
@@ -93,139 +96,11 @@ const AdminDashboard = () => {
   ]);
 
   // State for all our data
-  const [doctors, setDoctors] = useState<Doctor[]>([
-    { 
-      id: 1, 
-      name: "Dr. Sarah Johnson", 
-      specialization: "Cardiology", 
-      department: "Cardiology", 
-      email: "sarah.johnson@hospital.com", 
-      phone: "+254700123458",
-      status: "Active", 
-      lastActive: "2 min ago",
-      licenseNumber: "MD-12345",
-      yearsOfExperience: 10
-    },
-    { 
-      id: 2, 
-      name: "Dr. Michael Chen", 
-      specialization: "Neurology", 
-      department: "Neurology", 
-      email: "michael.chen@hospital.com", 
-      phone: "+254700123459",
-      status: "Active", 
-      lastActive: "15 min ago",
-      licenseNumber: "MD-12346",
-      yearsOfExperience: 8
-    }
-  ]);
-
-  const [patients, setPatients] = useState<Patient[]>([
-    { 
-      id: 1, 
-      name: "John Doe", 
-      age: 35, 
-      phone: "+254700123456", 
-      email: "john.doe@email.com", 
-      status: "Active", 
-      lastVisit: "Today",
-      bloodGroup: "A+",
-      allergies: "Penicillin",
-      medicalHistory: "Hypertension"
-    },
-    { 
-      id: 2, 
-      name: "Jane Smith", 
-      age: 28, 
-      phone: "+254700123457", 
-      email: "jane.smith@email.com", 
-      status: "Active", 
-      lastVisit: "Yesterday",
-      bloodGroup: "O-",
-      allergies: "None",
-      medicalHistory: "None"
-    }
-  ]);
-
-  const [departments, setDepartments] = useState<Department[]>([
-    { id: 1, name: "Cardiology", assignedDoctor: "Dr. Sarah Johnson", status: "Active", patientCount: 124 },
-    { id: 2, name: "Neurology", assignedDoctor: "Dr. Michael Chen", status: "Active", patientCount: 87 }
-  ]);
-
-  const [users, setUsers] = useState<User[]>([
-    { id: 1, name: "Dr. Alice Johnson", email: "alice.j@afyaconnect.com", role: "Doctor", status: "Active", lastLogin: "Today" },
-    { id: 2, name: "Mark Doe", email: "mark.d@afyaconnect.com", role: "Reception", status: "Active", lastLogin: "Today" },
-    { id: 3, name: "Jane Smith", email: "jane.s@afyaconnect.com", role: "Lab", status: "Inactive", lastLogin: "1 week ago" },
-    { id: 4, name: "Peter Jones", email: "peter.j@afyaconnect.com", role: "Admin", status: "Active", lastLogin: "Today" },
-    { id: 5, name: "Mary Brown", email: "mary.b@afyaconnect.com", role: "Pharmacy", status: "Active", lastLogin: "Yesterday" }
-  ]);
-
-  const [appointments, setAppointments] = useState<Appointment[]>([
-    { 
-      id: 1, 
-      patientName: "John Doe", 
-      doctorName: "Dr. Alice Johnson", 
-      date: new Date().toISOString().split('T')[0], 
-      time: "10:00 AM", 
-      status: "Confirmed",
-      notes: "Routine checkup"
-    },
-    { 
-      id: 2, 
-      patientName: "Jane Smith", 
-      doctorName: "Dr. Michael Chen", 
-      date: new Date().toISOString().split('T')[0], 
-      time: "11:30 AM", 
-      status: "Pending",
-      notes: "Follow-up appointment"
-    }
-  ]);
-
-  // Form states
-  const [doctorForm, setDoctorForm] = useState<Omit<Doctor, 'id' | 'lastActive'>>({
-    name: "",
-    specialization: "",
-    department: "",
-    email: "",
-    phone: "",
-    status: "Active",
-    licenseNumber: "",
-    yearsOfExperience: 0
-  });
-
-  const [patientForm, setPatientForm] = useState<Omit<Patient, 'id' | 'lastVisit'>>({
-    name: "",
-    age: 0,
-    phone: "",
-    email: "",
-    status: "Active",
-    bloodGroup: "",
-    allergies: "",
-    medicalHistory: ""
-  });
-
-  const [departmentForm, setDepartmentForm] = useState<Omit<Department, 'id' | 'patientCount'>>({
-    name: "",
-    assignedDoctor: "",
-    status: "Active"
-  });
-
-  const [userForm, setUserForm] = useState<Omit<User, 'id' | 'lastLogin'>>({
-    name: "",
-    email: "",
-    role: "Doctor",
-    status: "Active"
-  });
-
-  const [appointmentForm, setAppointmentForm] = useState<Omit<Appointment, 'id'>>({
-    patientName: "",
-    doctorName: "",
-    date: new Date().toISOString().split('T')[0],
-    time: "",
-    status: "Pending",
-    notes: ""
-  });
-
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [dashboardStats, setDashboardStats] = useState({
     patientsToday: 0,
     patientsChange: 0,
@@ -240,60 +115,112 @@ const AdminDashboard = () => {
     revenue: 0
   });
 
-  // Fetch dashboard data
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      setIsLoading(true);
-      try {
-        // Simulate API call with timeout
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Calculate stats from our data
-        setDashboardStats({
-          patientsToday: patients.filter(p => p.lastVisit === "Today").length,
-          patientsChange: 5, // Mock value
-          activeStaff: users.filter(u => u.status === "Active").length,
-          onlineStaff: users.filter(u => u.lastLogin === "Today").length,
-          systemUptime: 99.9,
-          prescriptions: 573, // Mock value
-          prescriptionsChange: 12, // Mock value
-          appointmentsToday: appointments.filter(a => a.date === new Date().toISOString().split('T')[0]).length,
-          labTests: 156, // Mock value
-          criticalAlerts: 3, // Mock value
-          revenue: 12543 // Mock value
-        });
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to load dashboard data",
-          variant: "destructive"
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Form states
+  const [doctorForm, setDoctorForm] = useState<Omit<Doctor, '_id' | 'lastActive'>>({
+    name: "",
+    specialization: "",
+    department: "",
+    email: "",
+    phone: "",
+    status: "Active",
+    licenseNumber: "",
+    yearsOfExperience: 0
+  });
 
-    fetchDashboardData();
-  }, [patients, users, appointments]);
+  const [patientForm, setPatientForm] = useState<Omit<Patient, '_id' | 'lastVisit'>>({
+    name: "",
+    age: 0,
+    phone: "",
+    email: "",
+    status: "Active",
+    bloodGroup: "",
+    allergies: "",
+    medicalHistory: ""
+  });
+
+  const [departmentForm, setDepartmentForm] = useState<Omit<Department, '_id' | 'patientCount'>>({
+    name: "",
+    assignedDoctor: "",
+    status: "Active"
+  });
+
+  const [userForm, setUserForm] = useState<Omit<User, '_id' | 'lastLogin'>>({
+    name: "",
+    email: "",
+    role: "Doctor",
+    status: "Active"
+  });
+
+  const [appointmentForm, setAppointmentForm] = useState<Omit<Appointment, '_id'>>({
+    patientName: "",
+    doctorName: "",
+    date: new Date().toISOString().split('T')[0],
+    time: "",
+    status: "Pending",
+    notes: ""
+  });
+
+ const handleLogout = () => {
+    localStorage.removeItem('afya-token');
+    localStorage.removeItem('afya-user');
+    navigate('/');
+  };
+
+  // Fetch all data
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Fetch all data in parallel
+      const [doctorsRes, patientsRes, departmentsRes, usersRes, appointmentsRes, statsRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/doctors`),
+        axios.get(`${API_BASE_URL}/patient`),
+        axios.get(`${API_BASE_URL}/departments`),
+        axios.get(`${API_BASE_URL}/users`),
+        axios.get(`${API_BASE_URL}/patient/appointments`),
+        axios.get(`${API_BASE_URL}/dashboard/stats`)
+      ]);
+
+      setDoctors(doctorsRes.data);
+      setPatients(patientsRes.data);
+      setDepartments(departmentsRes.data);
+      setUsers(usersRes.data);
+      setAppointments(appointmentsRes.data);
+      setDashboardStats(statsRes.data);
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch data",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   // View details handler
-  const handleViewDetails = (type: string, id: number) => {
+  const handleViewDetails = (type: string, id: string) => {
     let item;
     switch(type) {
       case 'doctor':
-        item = doctors.find(d => d.id === id);
+        item = doctors.find(d => d._id === id);
         break;
       case 'patient':
-        item = patients.find(p => p.id === id);
+        item = patients.find(p => p._id === id);
         break;
       case 'department':
-        item = departments.find(d => d.id === id);
+        item = departments.find(d => d._id === id);
         break;
       case 'user':
-        item = users.find(u => u.id === id);
+        item = users.find(u => u._id === id);
         break;
       case 'appointment':
-        item = appointments.find(a => a.id === id);
+        item = appointments.find(a => a._id === id);
         break;
       default:
         item = null;
@@ -317,44 +244,44 @@ const AdminDashboard = () => {
   };
 
   // Edit handler - loads data into form
-  const handleEdit = (type: string, id: number) => {
+  const handleEdit = (type: string, id: string) => {
     switch(type) {
       case 'doctor':
-        const doctorToEdit = doctors.find(d => d.id === id);
+        const doctorToEdit = doctors.find(d => d._id === id);
         if (doctorToEdit) {
-          const { id: _, lastActive: __, ...rest } = doctorToEdit;
+          const { _id, lastActive, ...rest } = doctorToEdit;
           setDoctorForm(rest);
           setIsEditing({ type, id });
         }
         break;
       case 'patient':
-        const patientToEdit = patients.find(p => p.id === id);
+        const patientToEdit = patients.find(p => p._id === id);
         if (patientToEdit) {
-          const { id: _, lastVisit: __, ...rest } = patientToEdit;
+          const { _id, lastVisit, ...rest } = patientToEdit;
           setPatientForm(rest);
           setIsEditing({ type, id });
         }
         break;
       case 'department':
-        const deptToEdit = departments.find(d => d.id === id);
+        const deptToEdit = departments.find(d => d._id === id);
         if (deptToEdit) {
-          const { id: _, patientCount: __, ...rest } = deptToEdit;
+          const { _id, patientCount, ...rest } = deptToEdit;
           setDepartmentForm(rest);
           setIsEditing({ type, id });
         }
         break;
       case 'user':
-        const userToEdit = users.find(u => u.id === id);
+        const userToEdit = users.find(u => u._id === id);
         if (userToEdit) {
-          const { id: _, lastLogin: __, ...rest } = userToEdit;
+          const { _id, lastLogin, ...rest } = userToEdit;
           setUserForm(rest);
           setIsEditing({ type, id });
         }
         break;
       case 'appointment':
-        const appointmentToEdit = appointments.find(a => a.id === id);
+        const appointmentToEdit = appointments.find(a => a._id === id);
         if (appointmentToEdit) {
-          const { id: _, ...rest } = appointmentToEdit;
+          const { _id, ...rest } = appointmentToEdit;
           setAppointmentForm(rest);
           setIsEditing({ type, id });
         }
@@ -363,35 +290,31 @@ const AdminDashboard = () => {
   };
 
   // Save edit handler
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!isEditing) return;
 
     try {
+      let response;
       switch(isEditing.type) {
         case 'doctor':
-          setDoctors(doctors.map(d => 
-            d.id === isEditing.id ? { ...doctorForm, id: isEditing.id, lastActive: "Just now" } : d
-          ));
+          response = await axios.put(`${API_BASE_URL}/doctors/${isEditing.id}`, doctorForm);
+          setDoctors(doctors.map(d => d._id === isEditing.id ? response.data : d));
           break;
         case 'patient':
-          setPatients(patients.map(p => 
-            p.id === isEditing.id ? { ...patientForm, id: isEditing.id, lastVisit: "Today" } : p
-          ));
+          response = await axios.put(`${API_BASE_URL}/patients/${isEditing.id}`, patientForm);
+          setPatients(patients.map(p => p._id === isEditing.id ? response.data : p));
           break;
         case 'department':
-          setDepartments(departments.map(d => 
-            d.id === isEditing.id ? { ...departmentForm, id: isEditing.id, patientCount: d.patientCount } : d
-          ));
+          response = await axios.put(`${API_BASE_URL}/departments/${isEditing.id}`, departmentForm);
+          setDepartments(departments.map(d => d._id === isEditing.id ? response.data : d));
           break;
         case 'user':
-          setUsers(users.map(u => 
-            u.id === isEditing.id ? { ...userForm, id: isEditing.id, lastLogin: "Today" } : u
-          ));
+          response = await axios.put(`${API_BASE_URL}/users/${isEditing.id}`, userForm);
+          setUsers(users.map(u => u._id === isEditing.id ? response.data : u));
           break;
         case 'appointment':
-          setAppointments(appointments.map(a => 
-            a.id === isEditing.id ? { ...appointmentForm, id: isEditing.id } : a
-          ));
+          response = await axios.put(`${API_BASE_URL}/appointments/${isEditing.id}`, appointmentForm);
+          setAppointments(appointments.map(a => a._id === isEditing.id ? response.data : a));
           break;
       }
 
@@ -410,14 +333,13 @@ const AdminDashboard = () => {
   };
 
   // Create new item handler
-  const handleCreate = (type: string) => {
+  const handleCreate = async (type: string) => {
     try {
-      const newId = Math.max(0, ...doctors.map(d => d.id), ...patients.map(p => p.id), 
-        ...departments.map(d => d.id), ...users.map(u => u.id), ...appointments.map(a => a.id)) + 1;
-
+      let response;
       switch(type) {
         case 'doctor':
-          setDoctors([...doctors, { ...doctorForm, id: newId, lastActive: "Just now" }]);
+          response = await axios.post(`${API_BASE_URL}/doctors`, doctorForm);
+          setDoctors([...doctors, response.data]);
           setDoctorForm({
             name: "",
             specialization: "",
@@ -430,7 +352,8 @@ const AdminDashboard = () => {
           });
           break;
         case 'patient':
-          setPatients([...patients, { ...patientForm, id: newId, lastVisit: "Today" }]);
+          response = await axios.post(`${API_BASE_URL}/patients`, patientForm);
+          setPatients([...patients, response.data]);
           setPatientForm({
             name: "",
             age: 0,
@@ -443,7 +366,8 @@ const AdminDashboard = () => {
           });
           break;
         case 'department':
-          setDepartments([...departments, { ...departmentForm, id: newId, patientCount: 0 }]);
+          response = await axios.post(`${API_BASE_URL}/departments`, departmentForm);
+          setDepartments([...departments, response.data]);
           setDepartmentForm({
             name: "",
             assignedDoctor: "",
@@ -451,7 +375,8 @@ const AdminDashboard = () => {
           });
           break;
         case 'user':
-          setUsers([...users, { ...userForm, id: newId, lastLogin: "Today" }]);
+          response = await axios.post(`${API_BASE_URL}/users`, userForm);
+          setUsers([...users, response.data]);
           setUserForm({
             name: "",
             email: "",
@@ -460,7 +385,8 @@ const AdminDashboard = () => {
           });
           break;
         case 'appointment':
-          setAppointments([...appointments, { ...appointmentForm, id: newId }]);
+          response = await axios.post(`${API_BASE_URL}/appointments`, appointmentForm);
+          setAppointments([...appointments, response.data]);
           setAppointmentForm({
             patientName: "",
             doctorName: "",
@@ -487,23 +413,25 @@ const AdminDashboard = () => {
   };
 
   // Delete handler
-  const handleDelete = (type: string, id: number) => {
+  const handleDelete = async (type: string, id: string) => {
     try {
+      await axios.delete(`${API_BASE_URL}/${type}/${id}`);
+      
       switch(type) {
         case 'doctor':
-          setDoctors(doctors.filter(d => d.id !== id));
+          setDoctors(doctors.filter(d => d._id !== id));
           break;
         case 'patient':
-          setPatients(patients.filter(p => p.id !== id));
+          setPatients(patients.filter(p => p._id !== id));
           break;
         case 'department':
-          setDepartments(departments.filter(d => d.id !== id));
+          setDepartments(departments.filter(d => d._id !== id));
           break;
         case 'user':
-          setUsers(users.filter(u => u.id !== id));
+          setUsers(users.filter(u => u._id !== id));
           break;
         case 'appointment':
-          setAppointments(appointments.filter(a => a.id !== id));
+          setAppointments(appointments.filter(a => a._id !== id));
           break;
       }
 
@@ -521,33 +449,39 @@ const AdminDashboard = () => {
   };
 
   // Toggle status handler
-  const handleToggleStatus = (type: string, id: number) => {
+  const handleToggleStatus = async (type: string, id: string) => {
     try {
+      const item = 
+        type === 'doctor' ? doctors.find(d => d._id === id) :
+        type === 'patient' ? patients.find(p => p._id === id) :
+        type === 'department' ? departments.find(d => d._id === id) :
+        type === 'user' ? users.find(u => u._id === id) :
+        appointments.find(a => a._id === id);
+      
+      if (!item) return;
+
+      const newStatus = 
+        type === 'appointment' ? 
+          (item.status === "Confirmed" ? "Cancelled" : "Confirmed") :
+          (item.status === "Active" ? "Inactive" : "Active");
+
+      const response = await axios.patch(`${API_BASE_URL}/${type}/${id}/status`, { status: newStatus });
+
       switch(type) {
         case 'doctor':
-          setDoctors(doctors.map(d => 
-            d.id === id ? { ...d, status: d.status === "Active" ? "Inactive" : "Active" } : d
-          ));
+          setDoctors(doctors.map(d => d._id === id ? response.data : d));
           break;
         case 'patient':
-          setPatients(patients.map(p => 
-            p.id === id ? { ...p, status: p.status === "Active" ? "Inactive" : "Active" } : p
-          ));
+          setPatients(patients.map(p => p._id === id ? response.data : p));
           break;
         case 'department':
-          setDepartments(departments.map(d => 
-            d.id === id ? { ...d, status: d.status === "Active" ? "Inactive" : "Active" } : d
-          ));
+          setDepartments(departments.map(d => d._id === id ? response.data : d));
           break;
         case 'user':
-          setUsers(users.map(u => 
-            u.id === id ? { ...u, status: u.status === "Active" ? "Inactive" : "Active" } : u
-          ));
+          setUsers(users.map(u => u._id === id ? response.data : u));
           break;
         case 'appointment':
-          setAppointments(appointments.map(a => 
-            a.id === id ? { ...a, status: a.status === "Confirmed" ? "Cancelled" : "Confirmed" } : a
-          ));
+          setAppointments(appointments.map(a => a._id === id ? response.data : a));
           break;
       }
 
@@ -701,7 +635,7 @@ const AdminDashboard = () => {
                   <Lock className="mr-2 h-4 w-4" />
                   <span>Privacy</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/logout")}>
+                <DropdownMenuItem onClick={handleLogout}>
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   <span>Logout</span>
                 </DropdownMenuItem>
@@ -1150,7 +1084,7 @@ const AdminDashboard = () => {
                           </SelectTrigger>
                           <SelectContent>
                             {availableDoctors.map(doctor => (
-                              <SelectItem key={doctor.id} value={doctor.name}>{doctor.name}</SelectItem>
+                              <SelectItem key={doctor._id} value={doctor.name}>{doctor.name}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1253,158 +1187,166 @@ const AdminDashboard = () => {
                 <CardDescription>Manage doctor accounts and specializations</CardDescription>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Specialization</TableHead>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Last Active</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredData(doctors, 'doctors').map(doctor => (
-                      <TableRow key={doctor.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={`/avatars/doctor-${doctor.id}.jpg`} />
-                              <AvatarFallback>{doctor.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            {isEditing?.type === 'doctor' && isEditing?.id === doctor.id ? (
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Specialization</TableHead>
+                        <TableHead>Department</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Last Active</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredData(doctors, 'doctors').map(doctor => (
+                        <TableRow key={doctor._id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarImage src={`/avatars/doctor-${doctor._id}.jpg`} />
+                                <AvatarFallback>{doctor.name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              {isEditing?.type === 'doctor' && isEditing?.id === doctor._id ? (
+                                <Input
+                                  value={doctorForm.name}
+                                  onChange={(e) => setDoctorForm({...doctorForm, name: e.target.value})}
+                                />
+                              ) : (
+                                doctor.name
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'doctor' && isEditing?.id === doctor._id ? (
+                              <Select
+                                value={doctorForm.specialization}
+                                onValueChange={(value) => setDoctorForm({...doctorForm, specialization: value})}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Cardiology">Cardiology</SelectItem>
+                                  <SelectItem value="Neurology">Neurology</SelectItem>
+                                  <SelectItem value="Pediatrics">Pediatrics</SelectItem>
+                                  <SelectItem value="Orthopedics">Orthopedics</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              doctor.specialization
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'doctor' && isEditing?.id === doctor._id ? (
                               <Input
-                                value={doctorForm.name}
-                                onChange={(e) => setDoctorForm({...doctorForm, name: e.target.value})}
+                                value={doctorForm.department}
+                                onChange={(e) => setDoctorForm({...doctorForm, department: e.target.value})}
                               />
                             ) : (
-                              doctor.name
+                              doctor.department
                             )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'doctor' && isEditing?.id === doctor.id ? (
-                            <Select
-                              value={doctorForm.specialization}
-                              onValueChange={(value) => setDoctorForm({...doctorForm, specialization: value})}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Cardiology">Cardiology</SelectItem>
-                                <SelectItem value="Neurology">Neurology</SelectItem>
-                                <SelectItem value="Pediatrics">Pediatrics</SelectItem>
-                                <SelectItem value="Orthopedics">Orthopedics</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            doctor.specialization
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'doctor' && isEditing?.id === doctor.id ? (
-                            <Input
-                              value={doctorForm.department}
-                              onChange={(e) => setDoctorForm({...doctorForm, department: e.target.value})}
-                            />
-                          ) : (
-                            doctor.department
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'doctor' && isEditing?.id === doctor.id ? (
-                            <Select
-                              value={doctorForm.status}
-                              onValueChange={(value) => setDoctorForm({...doctorForm, status: value as "Active" | "Inactive"})}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Active">Active</SelectItem>
-                                <SelectItem value="Inactive">Inactive</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Badge variant={doctor.status === "Active" ? "default" : "secondary"}>
-                              {doctor.status}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>{doctor.lastActive}</TableCell>
-                        <TableCell className="text-right">
-                          {isEditing?.type === 'doctor' && isEditing?.id === doctor.id ? (
-                            <div className="flex gap-2 justify-end">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => setIsEditing(null)}
+                          </TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'doctor' && isEditing?.id === doctor._id ? (
+                              <Select
+                                value={doctorForm.status}
+                                onValueChange={(value) => setDoctorForm({...doctorForm, status: value as "Active" | "Inactive"})}
                               >
-                                <X className="h-4 w-4 mr-1" />
-                                Cancel
-                              </Button>
-                              <Button 
-                                variant="default" 
-                                size="sm" 
-                                onClick={handleSaveEdit}
-                              >
-                                <Check className="h-4 w-4 mr-1" />
-                                Save
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex gap-2 justify-end">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleViewDetails('doctor', doctor.id)}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                View
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleEdit('doctor', doctor.id)}
-                              >
-                                <Edit className="h-4 w-4 mr-1" />
-                                Edit
-                              </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleToggleStatus('doctor', doctor.id)}>
-                                    {doctor.status === "Active" ? (
-                                      <>
-                                        <Unlock className="mr-2 h-4 w-4" />
-                                        Deactivate
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Lock className="mr-2 h-4 w-4" />
-                                        Activate
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="text-red-600" onClick={() => handleDelete('doctor', doctor.id)}>
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Active">Active</SelectItem>
+                                  <SelectItem value="Inactive">Inactive</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge variant={doctor.status === "Active" ? "default" : "secondary"}>
+                                {doctor.status}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>{doctor.lastActive}</TableCell>
+                          <TableCell className="text-right">
+                            {isEditing?.type === 'doctor' && isEditing?.id === doctor._id ? (
+                              <div className="flex gap-2 justify-end">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => setIsEditing(null)}
+                                >
+                                  <X className="h-4 w-4 mr-1" />
+                                  Cancel
+                                </Button>
+                                <Button 
+                                  variant="default" 
+                                  size="sm" 
+                                  onClick={handleSaveEdit}
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Save
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2 justify-end">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleViewDetails('doctor', doctor._id)}
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  View
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleEdit('doctor', doctor._id)}
+                                >
+                                  <Edit className="h-4 w-4 mr-1" />
+                                  Edit
+                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleToggleStatus('doctor', doctor._id)}>
+                                      {doctor.status === "Active" ? (
+                                        <>
+                                          <Unlock className="mr-2 h-4 w-4" />
+                                          Deactivate
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Lock className="mr-2 h-4 w-4" />
+                                          Activate
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-red-600" onClick={() => handleDelete('doctor', doctor._id)}>
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <div className="text-sm text-muted-foreground">
@@ -1430,162 +1372,170 @@ const AdminDashboard = () => {
                 <CardDescription>Manage patient accounts and information</CardDescription>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Age</TableHead>
-                      <TableHead>Contact</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Last Visit</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredData(patients, 'patients').map(patient => (
-                      <TableRow key={patient.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={`/avatars/patient-${patient.id}.jpg`} />
-                              <AvatarFallback>{patient.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            {isEditing?.type === 'patient' && isEditing?.id === patient.id ? (
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Age</TableHead>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Last Visit</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredData(patients, 'patients').map(patient => (
+                        <TableRow key={patient._id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarImage src={`/avatars/patient-${patient._id}.jpg`} />
+                                <AvatarFallback>{patient.name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              {isEditing?.type === 'patient' && isEditing?.id === patient._id ? (
+                                <Input
+                                  value={patientForm.name}
+                                  onChange={(e) => setPatientForm({...patientForm, name: e.target.value})}
+                                />
+                              ) : (
+                                patient.name
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'patient' && isEditing?.id === patient._id ? (
                               <Input
-                                value={patientForm.name}
-                                onChange={(e) => setPatientForm({...patientForm, name: e.target.value})}
+                                type="number"
+                                value={patientForm.age}
+                                onChange={(e) => setPatientForm({...patientForm, age: parseInt(e.target.value) || 0})}
                               />
                             ) : (
-                              patient.name
+                              patient.age
                             )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'patient' && isEditing?.id === patient.id ? (
-                            <Input
-                              type="number"
-                              value={patientForm.age}
-                              onChange={(e) => setPatientForm({...patientForm, age: parseInt(e.target.value) || 0})}
-                            />
-                          ) : (
-                            patient.age
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            {isEditing?.type === 'patient' && isEditing?.id === patient.id ? (
-                              <>
-                                <Input
-                                  type="email"
-                                  value={patientForm.email}
-                                  onChange={(e) => setPatientForm({...patientForm, email: e.target.value})}
-                                  className="mb-2"
-                                />
-                                <Input
-                                  value={patientForm.phone}
-                                  onChange={(e) => setPatientForm({...patientForm, phone: e.target.value})}
-                                />
-                              </>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              {isEditing?.type === 'patient' && isEditing?.id === patient._id ? (
+                                <>
+                                  <Input
+                                    type="email"
+                                    value={patientForm.email}
+                                    onChange={(e) => setPatientForm({...patientForm, email: e.target.value})}
+                                    className="mb-2"
+                                  />
+                                  <Input
+                                    value={patientForm.phone}
+                                    onChange={(e) => setPatientForm({...patientForm, phone: e.target.value})}
+                                  />
+                                </>
+                              ) : (
+                                <>
+                                  <span>{patient.email}</span>
+                                  <span className="text-muted-foreground text-sm">{patient.phone}</span>
+                                </>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'patient' && isEditing?.id === patient._id ? (
+                              <Select
+                                value={patientForm.status}
+                                onValueChange={(value) => setPatientForm({...patientForm, status: value as "Active" | "Inactive"})}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Active">Active</SelectItem>
+                                  <SelectItem value="Inactive">Inactive</SelectItem>
+                                </SelectContent>
+                              </Select>
                             ) : (
-                              <>
-                                <span>{patient.email}</span>
-                                <span className="text-muted-foreground text-sm">{patient.phone}</span>
-                              </>
+                              <Badge variant={patient.status === "Active" ? "default" : "secondary"}>
+                                {patient.status}
+                              </Badge>
                             )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'patient' && isEditing?.id === patient.id ? (
-                            <Select
-                              value={patientForm.status}
-                              onValueChange={(value) => setPatientForm({...patientForm, status: value as "Active" | "Inactive"})}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Active">Active</SelectItem>
-                                <SelectItem value="Inactive">Inactive</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Badge variant={patient.status === "Active" ? "default" : "secondary"}>
-                              {patient.status}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>{patient.lastVisit}</TableCell>
-                        <TableCell className="text-right">
-                          {isEditing?.type === 'patient' && isEditing?.id === patient.id ? (
-                            <div className="flex gap-2 justify-end">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => setIsEditing(null)}
-                              >
-                                <X className="h-4 w-4 mr-1" />
-                                Cancel
-                              </Button>
-                              <Button 
-                                variant="default" 
-                                size="sm" 
-                                onClick={handleSaveEdit}
-                              >
-                                <Check className="h-4 w-4 mr-1" />
-                                Save
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex gap-2 justify-end">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleViewDetails('patient', patient.id)}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                View
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleEdit('patient', patient.id)}
-                              >
-                                <Edit className="h-4 w-4 mr-1" />
-                                Edit
-                              </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleToggleStatus('patient', patient.id)}>
-                                    {patient.status === "Active" ? (
-                                      <>
-                                        <Unlock className="mr-2 h-4 w-4" />
-                                        Deactivate
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Lock className="mr-2 h-4 w-4" />
-                                        Activate
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="text-red-600" onClick={() => handleDelete('patient', patient.id)}>
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                          </TableCell>
+                          <TableCell>{patient.lastVisit}</TableCell>
+                          <TableCell className="text-right">
+                            {isEditing?.type === 'patient' && isEditing?.id === patient._id ? (
+                              <div className="flex gap-2 justify-end">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => setIsEditing(null)}
+                                >
+                                  <X className="h-4 w-4 mr-1" />
+                                  Cancel
+                                </Button>
+                                <Button 
+                                  variant="default" 
+                                  size="sm" 
+                                  onClick={handleSaveEdit}
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Save
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2 justify-end">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleViewDetails('patient', patient._id)}
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  View
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleEdit('patient', patient._id)}
+                                >
+                                  <Edit className="h-4 w-4 mr-1" />
+                                  Edit
+                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleToggleStatus('patient', patient._id)}>
+                                      {patient.status === "Active" ? (
+                                        <>
+                                          <Unlock className="mr-2 h-4 w-4" />
+                                          Deactivate
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Lock className="mr-2 h-4 w-4" />
+                                          Activate
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-red-600" onClick={() => handleDelete('patient', patient._id)}>
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <div className="text-sm text-muted-foreground">
@@ -1611,140 +1561,148 @@ const AdminDashboard = () => {
                 <CardDescription>Manage hospital departments and assigned staff</CardDescription>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Assigned Doctor</TableHead>
-                      <TableHead>Patients</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredData(departments, 'departments').map(dept => (
-                      <TableRow key={dept.id}>
-                        <TableCell className="font-medium">
-                          {isEditing?.type === 'department' && isEditing?.id === dept.id ? (
-                            <Input
-                              value={departmentForm.name}
-                              onChange={(e) => setDepartmentForm({...departmentForm, name: e.target.value})}
-                            />
-                          ) : (
-                            dept.name
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'department' && isEditing?.id === dept.id ? (
-                            <Select
-                              value={departmentForm.assignedDoctor}
-                              onValueChange={(value) => setDepartmentForm({...departmentForm, assignedDoctor: value})}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {availableDoctors.map(doctor => (
-                                  <SelectItem key={doctor.id} value={doctor.name}>{doctor.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            dept.assignedDoctor
-                          )}
-                        </TableCell>
-                        <TableCell>{dept.patientCount}</TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'department' && isEditing?.id === dept.id ? (
-                            <Select
-                              value={departmentForm.status}
-                              onValueChange={(value) => setDepartmentForm({...departmentForm, status: value as "Active" | "Inactive"})}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Active">Active</SelectItem>
-                                <SelectItem value="Inactive">Inactive</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Badge variant={dept.status === "Active" ? "default" : "secondary"}>
-                              {dept.status}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {isEditing?.type === 'department' && isEditing?.id === dept.id ? (
-                            <div className="flex gap-2 justify-end">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => setIsEditing(null)}
-                              >
-                                <X className="h-4 w-4 mr-1" />
-                                Cancel
-                              </Button>
-                              <Button 
-                                variant="default" 
-                                size="sm" 
-                                onClick={handleSaveEdit}
-                              >
-                                <Check className="h-4 w-4 mr-1" />
-                                Save
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex gap-2 justify-end">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleViewDetails('department', dept.id)}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                View
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleEdit('department', dept.id)}
-                              >
-                                <Edit className="h-4 w-4 mr-1" />
-                                Edit
-                              </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleToggleStatus('department', dept.id)}>
-                                    {dept.status === "Active" ? (
-                                      <>
-                                        <Unlock className="mr-2 h-4 w-4" />
-                                        Deactivate
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Lock className="mr-2 h-4 w-4" />
-                                        Activate
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="text-red-600" onClick={() => handleDelete('department', dept.id)}>
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Assigned Doctor</TableHead>
+                        <TableHead>Patients</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredData(departments, 'departments').map(dept => (
+                        <TableRow key={dept._id}>
+                          <TableCell className="font-medium">
+                            {isEditing?.type === 'department' && isEditing?.id === dept._id ? (
+                              <Input
+                                value={departmentForm.name}
+                                onChange={(e) => setDepartmentForm({...departmentForm, name: e.target.value})}
+                              />
+                            ) : (
+                              dept.name
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'department' && isEditing?.id === dept._id ? (
+                              <Select
+                                value={departmentForm.assignedDoctor}
+                                onValueChange={(value) => setDepartmentForm({...departmentForm, assignedDoctor: value})}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availableDoctors.map(doctor => (
+                                    <SelectItem key={doctor._id} value={doctor.name}>{doctor.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              dept.assignedDoctor
+                            )}
+                          </TableCell>
+                          <TableCell>{dept.patientCount}</TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'department' && isEditing?.id === dept._id ? (
+                              <Select
+                                value={departmentForm.status}
+                                onValueChange={(value) => setDepartmentForm({...departmentForm, status: value as "Active" | "Inactive"})}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Active">Active</SelectItem>
+                                  <SelectItem value="Inactive">Inactive</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge variant={dept.status === "Active" ? "default" : "secondary"}>
+                                {dept.status}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {isEditing?.type === 'department' && isEditing?.id === dept._id ? (
+                              <div className="flex gap-2 justify-end">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => setIsEditing(null)}
+                                >
+                                  <X className="h-4 w-4 mr-1" />
+                                  Cancel
+                                </Button>
+                                <Button 
+                                  variant="default" 
+                                  size="sm" 
+                                  onClick={handleSaveEdit}
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Save
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2 justify-end">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleViewDetails('department', dept._id)}
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  View
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleEdit('department', dept._id)}
+                                >
+                                  <Edit className="h-4 w-4 mr-1" />
+                                  Edit
+                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleToggleStatus('department', dept._id)}>
+                                      {dept.status === "Active" ? (
+                                        <>
+                                          <Unlock className="mr-2 h-4 w-4" />
+                                          Deactivate
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Lock className="mr-2 h-4 w-4" />
+                                          Activate
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-red-600" onClick={() => handleDelete('department', dept._id)}>
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <div className="text-sm text-muted-foreground">
@@ -1784,160 +1742,168 @@ const AdminDashboard = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Last Login</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredData(users, 'users').map(user => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={`/avatars/user-${user.id}.jpg`} />
-                              <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            {isEditing?.type === 'user' && isEditing?.id === user.id ? (
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Last Login</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredData(users, 'users').map(user => (
+                        <TableRow key={user._id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarImage src={`/avatars/user-${user._id}.jpg`} />
+                                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              {isEditing?.type === 'user' && isEditing?.id === user._id ? (
+                                <Input
+                                  value={userForm.name}
+                                  onChange={(e) => setUserForm({...userForm, name: e.target.value})}
+                                />
+                              ) : (
+                                user.name
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'user' && isEditing?.id === user._id ? (
                               <Input
-                                value={userForm.name}
-                                onChange={(e) => setUserForm({...userForm, name: e.target.value})}
+                                type="email"
+                                value={userForm.email}
+                                onChange={(e) => setUserForm({...userForm, email: e.target.value})}
                               />
                             ) : (
-                              user.name
+                              user.email
                             )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'user' && isEditing?.id === user.id ? (
-                            <Input
-                              type="email"
-                              value={userForm.email}
-                              onChange={(e) => setUserForm({...userForm, email: e.target.value})}
-                            />
-                          ) : (
-                            user.email
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'user' && isEditing?.id === user.id ? (
-                            <Select
-                              value={userForm.role}
-                              onValueChange={(value) => setUserForm({...userForm, role: value as any})}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Admin">Admin</SelectItem>
-                                <SelectItem value="Doctor">Doctor</SelectItem>
-                                <SelectItem value="Reception">Reception</SelectItem>
-                                <SelectItem value="Lab">Lab</SelectItem>
-                                <SelectItem value="Pharmacy">Pharmacy</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Badge variant="outline">{user.role}</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'user' && isEditing?.id === user.id ? (
-                            <Select
-                              value={userForm.status}
-                              onValueChange={(value) => setUserForm({...userForm, status: value as "Active" | "Inactive"})}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Active">Active</SelectItem>
-                                <SelectItem value="Inactive">Inactive</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Badge variant={user.status === "Active" ? "default" : "secondary"}>
-                              {user.status}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>{user.lastLogin}</TableCell>
-                        <TableCell className="text-right">
-                          {isEditing?.type === 'user' && isEditing?.id === user.id ? (
-                            <div className="flex gap-2 justify-end">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => setIsEditing(null)}
+                          </TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'user' && isEditing?.id === user._id ? (
+                              <Select
+                                value={userForm.role}
+                                onValueChange={(value) => setUserForm({...userForm, role: value as any})}
                               >
-                                <X className="h-4 w-4 mr-1" />
-                                Cancel
-                              </Button>
-                              <Button 
-                                variant="default" 
-                                size="sm" 
-                                onClick={handleSaveEdit}
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Admin">Admin</SelectItem>
+                                  <SelectItem value="Doctor">Doctor</SelectItem>
+                                  <SelectItem value="Reception">Reception</SelectItem>
+                                  <SelectItem value="Lab">Lab</SelectItem>
+                                  <SelectItem value="Pharmacy">Pharmacy</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge variant="outline">{user.role}</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'user' && isEditing?.id === user._id ? (
+                              <Select
+                                value={userForm.status}
+                                onValueChange={(value) => setUserForm({...userForm, status: value as "Active" | "Inactive"})}
                               >
-                                <Check className="h-4 w-4 mr-1" />
-                                Save
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex gap-2 justify-end">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleViewDetails('user', user.id)}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                View
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleEdit('user', user.id)}
-                              >
-                                <Edit className="h-4 w-4 mr-1" />
-                                Edit
-                              </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleToggleStatus('user', user.id)}>
-                                    {user.status === "Active" ? (
-                                      <>
-                                        <Unlock className="mr-2 h-4 w-4" />
-                                        Deactivate
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Lock className="mr-2 h-4 w-4" />
-                                        Activate
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="text-red-600" onClick={() => handleDelete('user', user.id)}>
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Active">Active</SelectItem>
+                                  <SelectItem value="Inactive">Inactive</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge variant={user.status === "Active" ? "default" : "secondary"}>
+                                {user.status}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>{user.lastLogin}</TableCell>
+                          <TableCell className="text-right">
+                            {isEditing?.type === 'user' && isEditing?.id === user._id ? (
+                              <div className="flex gap-2 justify-end">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => setIsEditing(null)}
+                                >
+                                  <X className="h-4 w-4 mr-1" />
+                                  Cancel
+                                </Button>
+                                <Button 
+                                  variant="default" 
+                                  size="sm" 
+                                  onClick={handleSaveEdit}
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Save
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2 justify-end">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleViewDetails('user', user._id)}
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  View
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleEdit('user', user._id)}
+                                >
+                                  <Edit className="h-4 w-4 mr-1" />
+                                  Edit
+                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleToggleStatus('user', user._id)}>
+                                      {user.status === "Active" ? (
+                                        <>
+                                          <Unlock className="mr-2 h-4 w-4" />
+                                          Deactivate
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Lock className="mr-2 h-4 w-4" />
+                                          Activate
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-red-600" onClick={() => handleDelete('user', user._id)}>
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <div className="text-sm text-muted-foreground">
@@ -1963,158 +1929,166 @@ const AdminDashboard = () => {
                 <CardDescription>Manage and track patient appointments</CardDescription>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Patient</TableHead>
-                      <TableHead>Doctor</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Time</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredData(appointments, 'appointments').map(appointment => (
-                      <TableRow key={appointment.id}>
-                        <TableCell className="font-medium">
-                          {isEditing?.type === 'appointment' && isEditing?.id === appointment.id ? (
-                            <Input
-                              value={appointmentForm.patientName}
-                              onChange={(e) => setAppointmentForm({...appointmentForm, patientName: e.target.value})}
-                            />
-                          ) : (
-                            appointment.patientName
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'appointment' && isEditing?.id === appointment.id ? (
-                            <Input
-                              value={appointmentForm.doctorName}
-                              onChange={(e) => setAppointmentForm({...appointmentForm, doctorName: e.target.value})}
-                            />
-                          ) : (
-                            appointment.doctorName
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'appointment' && isEditing?.id === appointment.id ? (
-                            <Input
-                              type="date"
-                              value={appointmentForm.date}
-                              onChange={(e) => setAppointmentForm({...appointmentForm, date: e.target.value})}
-                            />
-                          ) : (
-                            appointment.date
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'appointment' && isEditing?.id === appointment.id ? (
-                            <Input
-                              value={appointmentForm.time}
-                              onChange={(e) => setAppointmentForm({...appointmentForm, time: e.target.value})}
-                            />
-                          ) : (
-                            appointment.time
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {isEditing?.type === 'appointment' && isEditing?.id === appointment.id ? (
-                            <Select
-                              value={appointmentForm.status}
-                              onValueChange={(value) => setAppointmentForm({...appointmentForm, status: value as any})}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Confirmed">Confirmed</SelectItem>
-                                <SelectItem value="Pending">Pending</SelectItem>
-                                <SelectItem value="Cancelled">Cancelled</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Badge 
-                              variant={
-                                appointment.status === "Confirmed" ? "default" : 
-                                appointment.status === "Pending" ? "secondary" : "destructive"
-                              }
-                            >
-                              {appointment.status}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {isEditing?.type === 'appointment' && isEditing?.id === appointment.id ? (
-                            <div className="flex gap-2 justify-end">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => setIsEditing(null)}
-                              >
-                                <X className="h-4 w-4 mr-1" />
-                                Cancel
-                              </Button>
-                              <Button 
-                                variant="default" 
-                                size="sm" 
-                                onClick={handleSaveEdit}
-                              >
-                                <Check className="h-4 w-4 mr-1" />
-                                Save
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex gap-2 justify-end">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleViewDetails('appointment', appointment.id)}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                View
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleEdit('appointment', appointment.id)}
-                              >
-                                <Edit className="h-4 w-4 mr-1" />
-                                Edit
-                              </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleToggleStatus('appointment', appointment.id)}>
-                                    {appointment.status === "Confirmed" ? (
-                                      <>
-                                        <X className="mr-2 h-4 w-4" />
-                                        Cancel
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Check className="mr-2 h-4 w-4" />
-                                        Confirm
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="text-red-600" onClick={() => handleDelete('appointment', appointment.id)}>
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Patient</TableHead>
+                        <TableHead>Doctor</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Time</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredData(appointments, 'appointments').map(appointment => (
+                        <TableRow key={appointment._id}>
+                          <TableCell className="font-medium">
+                            {isEditing?.type === 'appointment' && isEditing?.id === appointment._id ? (
+                              <Input
+                                value={appointmentForm.patientName}
+                                onChange={(e) => setAppointmentForm({...appointmentForm, patientName: e.target.value})}
+                              />
+                            ) : (
+                              appointment.patientName
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'appointment' && isEditing?.id === appointment._id ? (
+                              <Input
+                                value={appointmentForm.doctorName}
+                                onChange={(e) => setAppointmentForm({...appointmentForm, doctorName: e.target.value})}
+                              />
+                            ) : (
+                              appointment.doctorName
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'appointment' && isEditing?.id === appointment._id ? (
+                              <Input
+                                type="date"
+                                value={appointmentForm.date}
+                                onChange={(e) => setAppointmentForm({...appointmentForm, date: e.target.value})}
+                              />
+                            ) : (
+                              appointment.date
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'appointment' && isEditing?.id === appointment._id ? (
+                              <Input
+                                value={appointmentForm.time}
+                                onChange={(e) => setAppointmentForm({...appointmentForm, time: e.target.value})}
+                              />
+                            ) : (
+                              appointment.time
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {isEditing?.type === 'appointment' && isEditing?.id === appointment._id ? (
+                              <Select
+                                value={appointmentForm.status}
+                                onValueChange={(value) => setAppointmentForm({...appointmentForm, status: value as any})}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Confirmed">Confirmed</SelectItem>
+                                  <SelectItem value="Pending">Pending</SelectItem>
+                                  <SelectItem value="Cancelled">Cancelled</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge 
+                                variant={
+                                  appointment.status === "Confirmed" ? "default" : 
+                                  appointment.status === "Pending" ? "secondary" : "destructive"
+                                }
+                              >
+                                {appointment.status}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {isEditing?.type === 'appointment' && isEditing?.id === appointment._id ? (
+                              <div className="flex gap-2 justify-end">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => setIsEditing(null)}
+                                >
+                                  <X className="h-4 w-4 mr-1" />
+                                  Cancel
+                                </Button>
+                                <Button 
+                                  variant="default" 
+                                  size="sm" 
+                                  onClick={handleSaveEdit}
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Save
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2 justify-end">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleViewDetails('appointment', appointment._id)}
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  View
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleEdit('appointment', appointment._id)}
+                                >
+                                  <Edit className="h-4 w-4 mr-1" />
+                                  Edit
+                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleToggleStatus('appointment', appointment._id)}>
+                                      {appointment.status === "Confirmed" ? (
+                                        <>
+                                          <X className="mr-2 h-4 w-4" />
+                                          Cancel
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Check className="mr-2 h-4 w-4" />
+                                          Confirm
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-red-600" onClick={() => handleDelete('appointment', appointment._id)}>
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <div className="text-sm text-muted-foreground">

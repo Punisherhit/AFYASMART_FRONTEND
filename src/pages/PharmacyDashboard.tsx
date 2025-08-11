@@ -4,10 +4,33 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Pill, Package, AlertTriangle, CheckCircle, Clock, Search, ShoppingCart, UserCheck, Plus, X, Edit, Trash2, Bell, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useNavigate } from "react-router-dom";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  Pill,
+  Package,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  Search,
+  ShoppingCart,
+  UserCheck,
+  Plus,
+  X,
+  Edit,
+  Trash2,
+  Bell,
+  ClipboardList,
+  Heart,
+  ArrowLeft,
+  User,
+  Settings,
+  Lock
+} from "lucide-react";
 
 type Prescription = {
   patient: string;
@@ -47,6 +70,7 @@ type Alert = {
 };
 
 const PharmacyDashboard = () => {
+  const navigate = useNavigate();
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([
     { 
       patient: "John Doe", 
@@ -267,6 +291,12 @@ const PharmacyDashboard = () => {
     toast.success("Alert marked as resolved");
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('afya-token');
+    localStorage.removeItem('afya-user');
+    navigate('/');
+  };
+
   const filteredPrescriptions = prescriptions.filter(prescription =>
     prescription.patient.toLowerCase().includes(searchTerm.toLowerCase()) ||
     prescription.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -279,8 +309,53 @@ const PharmacyDashboard = () => {
   const activeAlerts = alerts.filter(alert => !alert.resolved);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-secondary/20 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background">
+      {/* Top Navigation */}
+      <div className="border-b">
+        <div className="flex h-16 items-center px-6 justify-between">
+          <div className="flex items-center gap-2">
+            <Heart className="h-6 w-6 text-primary" />
+            <span className="font-bold">AfyaConnect</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" className="flex items-center gap-2" onClick={() => navigate('/')}>
+              <ArrowLeft className="h-4 w-4" />
+              Back to Home
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="gap-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src="/avatars/pharmacist.png" />
+                    <AvatarFallback>P</AvatarFallback>
+                  </Avatar>
+                  <span>Pharmacist</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem>
+                  <User className="mr-2 h-4 w-4" />
+                  <span>Profile</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Lock className="mr-2 h-4 w-4" />
+                  <span>Privacy</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout}>
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  <span>Logout</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-foreground">Pharmacy Dashboard</h1>
           <div className="flex items-center space-x-2">

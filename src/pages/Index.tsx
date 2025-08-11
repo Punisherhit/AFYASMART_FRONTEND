@@ -15,23 +15,29 @@ interface User {
 const Index = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
 
   // Check for existing user session on load
-  useEffect(() => {
-    const savedUser = localStorage.getItem('afya-user');
-    const savedToken = localStorage.getItem('afya-token');
-    
-    if (savedUser && savedToken) {
-      try {
-        const user = JSON.parse(savedUser);
-        setCurrentUser(user);
-      } catch (error) {
-        console.error('Error parsing saved user:', error);
-        localStorage.removeItem('afya-user');
-        localStorage.removeItem('afya-token');
-      }
+useEffect(() => {
+  const savedUser = localStorage.getItem('afya-user');
+  const savedToken = localStorage.getItem('afya-token'); // simulate auth
+
+  if (savedUser && savedToken) {
+    try {
+      const user = JSON.parse(savedUser);
+      setCurrentUser(user);
+    } catch (error) {
+      console.error('Error parsing saved user:', error);
+      localStorage.removeItem('afya-user');
+      localStorage.removeItem('afya-token');
     }
-  }, []);
+  }
+
+  setLoading(false);
+}, []);
+
+
 
   const handleGetStartedClick = () => {
     setIsAuthModalOpen(true);
@@ -50,10 +56,9 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Role-based redirect */}
-      {/* <RoleBasedRedirect user={currentUser} /> */}
-     
-      
-      
+      {!loading && currentUser?.role && <RoleBasedRedirect user={currentUser} />}
+
+            
       {/* Navigation */}
       <Navbar onGetStartedClick={handleGetStartedClick} />
       

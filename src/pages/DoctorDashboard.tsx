@@ -182,6 +182,13 @@ const DoctorDashboard = () => {
     patient.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Logout function
+  const handleLogout = () => {
+    localStorage.removeItem('afya-token');
+    localStorage.removeItem('afya-user');
+    navigate('/');
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -202,7 +209,12 @@ const DoctorDashboard = () => {
               <p className="text-muted-foreground">Dr. Sarah Johnson - Cardiology</p>
             </div>
           </div>
-          <Badge variant="default">Doctor</Badge>
+          <div className="flex items-center gap-4">
+            <Badge variant="default">Doctor</Badge>
+            <Button variant="outline" onClick={handleLogout} className="flex items-center gap-2">
+              Logout
+            </Button>
+          </div>
         </div>
       </div>
 
