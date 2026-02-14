@@ -32,6 +32,7 @@ import {
   Shield,
   Loader2
 } from "lucide-react";
+import { FlowPatient, patientFlowApi, stageLabel } from "@/services/patientFlow";
 
 const BACKEND_URL = "http://localhost:5000";
 
@@ -175,6 +176,7 @@ const PatientDashboard = () => {
   const [billingInfo, setBillingInfo] = useState<BillingInfo[]>([]);
   const [departments, setDepartments] = useState<string[]>([]);
   const [availableDoctors, setAvailableDoctors] = useState<Doctor[]>([]);
+  const [flowPatients, setFlowPatients] = useState<FlowPatient[]>([]);
   
   const [appointmentForm, setAppointmentForm] = useState({
     doctor: "",
@@ -288,6 +290,19 @@ const PatientDashboard = () => {
 
     fetchPatientData();
   }, [navigate]);
+
+  useEffect(() => {
+    const sync = () => setFlowPatients(patientFlowApi.getAll());
+    sync();
+    const unsubscribe = patientFlowApi.subscribe(sync);
+    return unsubscribe;
+  }, []);
+
+  const sessionUser = JSON.parse(localStorage.getItem("afya-user") || "{}") as { email?: string; name?: string };
+  const linkedFlowRecords = flowPatients.filter((p) =>
+    (sessionUser.email && p.email && p.email.toLowerCase() === sessionUser.email.toLowerCase()) ||
+    (p.name && patientProfile.fullName && p.name.toLowerCase() === patientProfile.fullName.toLowerCase())
+  );
 
   const handleBookAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -686,6 +701,33 @@ const PatientDashboard = () => {
                       <p className="text-sm text-muted-foreground text-center py-4">No recent medical records</p>
                     )}
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>My Department Journey</CardTitle>
+                  <CardDescription>Track your real-time movement across departments, tests, and prescriptions.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {linkedFlowRecords.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No linked journey yet. Ensure reception captured your account email.</p>
+                  )}
+                  {linkedFlowRecords.map((record) => (
+                    <div key={record.id} className="rounded-lg border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium">{record.name}</p>
+                        <Badge variant="outline">{stageLabel[record.currentStage]}</Badge>
+                      </div>
+                      <p className="text-xs"><span className="font-medium">Tests:</span> {record.tests.length ? record.tests.join(" | ") : "No tests yet"}</p>
+                      <p className="text-xs"><span className="font-medium">Prescriptions:</span> {record.prescriptions.length ? record.prescriptions.join(", ") : "No prescriptions yet"}</p>
+                      <div className="space-y-1">
+                        {record.history.slice(0, 4).map((event, idx) => (
+                          <p key={idx} className="text-xs text-muted-foreground">• {stageLabel[event.stage]}: {event.action}{event.notes ? ` (${event.notes})` : ""}</p>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </CardContent>
               </Card>
             </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { 
   ArrowLeft, TestTube, Upload, Clock, CheckCircle, FileText, 
   Edit, Trash2, Download, Eye, PlusCircle, Image as ImageIcon,
@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { FlowPatient, patientFlowApi } from "@/services/patientFlow";
 
 type TestStatus = "pending" | "waiting" | "processing" | "completed" | "cancelled";
 
@@ -79,6 +80,16 @@ const LabDashboard = () => {
   const [selectedStatus, setSelectedStatus] = useState<TestStatus | "all">("all");
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
+
+  const [flowPatients, setFlowPatients] = useState<FlowPatient[]>([]);
+  const [labResults, setLabResults] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const sync = () => setFlowPatients(patientFlowApi.getAll());
+    sync();
+    const unsubscribe = patientFlowApi.subscribe(sync);
+    return unsubscribe;
+  }, []);
 
   const [tests, setTests] = useState<Test[]>([
     { 
@@ -275,6 +286,42 @@ const LabDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <div className="max-w-7xl mx-auto px-6 pt-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Cross-Department Lab Queue</CardTitle>
+            <CardDescription>Receive doctor requests, publish test results, and return patients for billing.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {flowPatients.filter((p) => p.currentStage === "lab").map((patient) => (
+              <div key={patient.id} className="rounded-md border p-3 flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
+                <div>
+                  <p className="font-medium">{patient.name}</p>
+                  <p className="text-xs text-muted-foreground">Add results then move to billing</p>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Test result summary"
+                    value={labResults[patient.id] || ""}
+                    onChange={(e) => setLabResults((prev) => ({ ...prev, [patient.id]: e.target.value }))}
+                    className="min-w-[220px]"
+                  />
+                  <Button size="sm" variant="outline" onClick={() => {
+                    const result = (labResults[patient.id] || "").trim();
+                    if (!result) return;
+                    patientFlowApi.addTestResult(patient.id, result);
+                    setLabResults((prev) => ({ ...prev, [patient.id]: "" }));
+                  }}>Save Result</Button>
+                  <Button size="sm" onClick={() => patientFlowApi.moveStage(patient.id, "billing", "Lab tests completed and sent to billing")}>To Billing</Button>
+                </div>
+              </div>
+            ))}
+            {flowPatients.filter((p) => p.currentStage === "lab").length === 0 && (
+              <p className="text-sm text-muted-foreground">No patients currently waiting for laboratory tests.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
       {/* Header */}
       <div className="border-b border-border bg-card">
         <div className="flex items-center justify-between p-4">

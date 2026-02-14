@@ -12,6 +12,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Heart, Thermometer, Activity, Clock, AlertTriangle, Users, Scale, Ruler, ArrowLeft, User, Settings, Lock } from "lucide-react";
 import { triageApi } from '@/services/triageApi';
+import DashboardSettingsDialog from "@/components/DashboardSettingsDialog";
+import { FlowPatient, patientFlowApi } from "@/services/patientFlow";
 
 type Priority = 'Critical' | 'Urgent' | 'Stable';
 
@@ -62,6 +64,17 @@ export default function TriageDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [flowPatients, setFlowPatients] = useState<FlowPatient[]>([]);
+  const [triageAssignments, setTriageAssignments] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const sync = () => setFlowPatients(patientFlowApi.getAll());
+    sync();
+    const unsubscribe = patientFlowApi.subscribe(sync);
+    return unsubscribe;
+  }, []);
+
 
   // Fetch initial data
   useEffect(() => {
@@ -302,15 +315,15 @@ export default function TriageDashboard() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => alert("Profile tools are coming soon")}>
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsSettingsOpen(true)}>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsSettingsOpen(true)}>
                   <Lock className="mr-2 h-4 w-4" />
                   <span>Privacy</span>
                 </DropdownMenuItem>
@@ -324,7 +337,57 @@ export default function TriageDashboard() {
         </div>
       </div>
 
+      <DashboardSettingsDialog
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+        storageKey="triage"
+        title="Triage Settings"
+        description="Control triage queue preferences, alerts and interface behavior."
+      />
+
       <div className="p-6 max-w-7xl mx-auto space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Cross-Department Triage Routing</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {flowPatients.filter((p) => p.currentStage === "triage").map((patient) => (
+              <div key={patient.id} className="border rounded-md p-3 flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
+                <div>
+                  <p className="font-medium">{patient.name}</p>
+                  <p className="text-xs text-muted-foreground">Assign to consultation department</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="flex h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    value={triageAssignments[patient.id] || ""}
+                    onChange={(e) => setTriageAssignments((prev) => ({ ...prev, [patient.id]: e.target.value }))}
+                  >
+                    <option value="">Select department</option>
+                    <option value="General Medicine">General Medicine</option>
+                    <option value="Cardiology">Cardiology</option>
+                    <option value="Neurology">Neurology</option>
+                    <option value="Orthopedics">Orthopedics</option>
+                    <option value="Pediatrics">Pediatrics</option>
+                  </select>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      const dept = triageAssignments[patient.id];
+                      if (!dept) return;
+                      patientFlowApi.assignConsultationDepartment(patient.id, dept);
+                    }}
+                  >
+                    Assign
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {flowPatients.filter((p) => p.currentStage === "triage").length === 0 && (
+              <p className="text-sm text-muted-foreground">No patients currently waiting for triage assignment.</p>
+            )}
+          </CardContent>
+        </Card>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" className="rounded-full">
