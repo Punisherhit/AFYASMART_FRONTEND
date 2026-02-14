@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,6 +33,8 @@ import {
 } from "lucide-react";
 import HospitalLayout from "@/components/HospitalLayout";
 import PatientFlowTracker from "@/components/PatientFlowTracker";
+import DashboardSettingsDialog from "@/components/DashboardSettingsDialog";
+import { FlowPatient, patientFlowApi, stageLabel } from "@/services/patientFlow";
 
 type Patient = {
   id: number;
@@ -56,6 +58,7 @@ const ReceptionDashboard = () => {
   const [isBillingDialogOpen, setIsBillingDialogOpen] = useState(false);
   const [isPatientDetailsOpen, setIsPatientDetailsOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const [waitingPatients, setWaitingPatients] = useState<Patient[]>([
     {
@@ -104,6 +107,16 @@ const ReceptionDashboard = () => {
     }
   ]);
 
+  const [flowPatients, setFlowPatients] = useState<FlowPatient[]>([]);
+  const [newFlowPatient, setNewFlowPatient] = useState({ name: "", email: "" });
+
+  useEffect(() => {
+    const sync = () => setFlowPatients(patientFlowApi.getAll());
+    sync();
+    const unsubscribe = patientFlowApi.subscribe(sync);
+    return unsubscribe;
+  }, []);
+
   const [billingForm, setBillingForm] = useState({
     consultationFee: 2500,
     labTests: 0,
@@ -131,10 +144,30 @@ const ReceptionDashboard = () => {
       .reduce((sum, p) => sum + p.amount, 0);
   };
 
+  const registerFlowPatient = () => {
+    if (!newFlowPatient.name.trim()) {
+      toast({ title: "Missing details", description: "Patient name is required", variant: "destructive" });
+      return;
+    }
+
+    patientFlowApi.registerAtReception({ name: newFlowPatient.name.trim(), email: newFlowPatient.email.trim() || undefined });
+    setNewFlowPatient({ name: "", email: "" });
+    toast({ title: "Patient registered", description: "Patient has been added to reception queue." });
+  };
+
+  const sendToTriage = (patientId: string) => {
+    patientFlowApi.moveStage(patientId, "triage", "Checked in and sent to triage");
+    toast({ title: "Sent to triage", description: "Triage can now assess this patient." });
+  };
+
+  const receptionQueue = flowPatients.filter((p) => p.currentStage === "reception");
+  const pendingPayments = flowPatients.filter((p) => p.currentStage === "billing");
+
+  const totalAmount = billingForm.consultationFee + billingForm.labTests + billingForm.medication + billingForm.procedures - billingForm.discount;
+
   const handleProcessBilling = async (e: React.FormEvent) => {
     e.preventDefault();
-    const totalAmount = billingForm.consultationFee + billingForm.labTests + billingForm.medication + billingForm.procedures - billingForm.discount;
-    
+
     setWaitingPatients(prev => 
       prev.map(patient => 
         patient.id === selectedPatient?.id 
@@ -194,8 +227,6 @@ const ReceptionDashboard = () => {
     localStorage.removeItem('afya-user');
     navigate('/');
   };
-
-  const totalAmount = billingForm.consultationFee + billingForm.labTests + billingForm.medication + billingForm.procedures - billingForm.discount;
 
   return (
     <HospitalLayout 
@@ -311,15 +342,15 @@ const ReceptionDashboard = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => toast({ title: "Profile", description: "Profile editor will be available in the next update." })}>
                     <User className="mr-2 h-4 w-4" />
                     <span>Profile</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsSettingsOpen(true)}>
                     <Settings className="mr-2 h-4 w-4" />
                     <span>Settings</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => toast({ title: "Privacy", description: "Security and privacy controls are now managed in Settings." })}>
                     <Lock className="mr-2 h-4 w-4" />
                     <span>Privacy</span>
                   </DropdownMenuItem>
@@ -333,7 +364,60 @@ const ReceptionDashboard = () => {
           </div>
         </div>
 
+        <DashboardSettingsDialog
+          open={isSettingsOpen}
+          onOpenChange={setIsSettingsOpen}
+          storageKey="reception"
+          title="Reception Settings"
+          description="Configure your reception workflow, notifications, and display preferences."
+        />
+
         <div className="p-6 max-w-7xl mx-auto space-y-6">
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Linked Patient Flow (Secretary)</CardTitle>
+              <CardDescription>Register patients and move them to triage or complete payment handoff.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid md:grid-cols-3 gap-3">
+                <Input placeholder="Patient full name" value={newFlowPatient.name} onChange={(e) => setNewFlowPatient((prev) => ({ ...prev, name: e.target.value }))} />
+                <Input placeholder="Patient email (optional)" value={newFlowPatient.email} onChange={(e) => setNewFlowPatient((prev) => ({ ...prev, email: e.target.value }))} />
+                <Button onClick={registerFlowPatient}><UserPlus className="h-4 w-4 mr-2" />Register & Queue</Button>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="rounded-lg border p-3 space-y-2">
+                  <p className="font-medium text-sm">Reception Queue ({receptionQueue.length})</p>
+                  {receptionQueue.map((patient) => (
+                    <div key={patient.id} className="flex items-center justify-between text-sm">
+                      <div>
+                        <p className="font-medium">{patient.name}</p>
+                        <p className="text-muted-foreground">{patient.email || "No email"}</p>
+                      </div>
+                      <Button size="sm" onClick={() => sendToTriage(patient.id)}>Send to Triage</Button>
+                    </div>
+                  ))}
+                  {receptionQueue.length === 0 && <p className="text-xs text-muted-foreground">No newly registered patients waiting at reception.</p>}
+                </div>
+
+                <div className="rounded-lg border p-3 space-y-2">
+                  <p className="font-medium text-sm">Patients Returned for Payment ({pendingPayments.length})</p>
+                  {pendingPayments.map((patient) => (
+                    <div key={patient.id} className="flex items-center justify-between text-sm">
+                      <div>
+                        <p className="font-medium">{patient.name}</p>
+                        <p className="text-muted-foreground">Stage: {stageLabel[patient.currentStage]}</p>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => patientFlowApi.moveStage(patient.id, "pharmacy", "Payment completed at secretary and sent to pharmacy")}>Send to Pharmacy</Button>
+                    </div>
+                  ))}
+                  {pendingPayments.length === 0 && <p className="text-xs text-muted-foreground">No patients currently waiting for payment handoff.</p>}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <Card className="hover:shadow-hover transition-shadow duration-300">

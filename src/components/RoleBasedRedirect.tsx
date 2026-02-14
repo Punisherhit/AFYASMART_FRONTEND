@@ -46,6 +46,8 @@ const RoleBasedRedirect = ({ user, loading = false, error = null }: RoleBasedRed
       billing: '/billing-dashboard',
       surgery: '/surgery-dashboard',
       triage: '/triage-dashboard',
+      ward: '/ward-dashboard',
+      maternity: '/maternity-dashboard',
     };
 
     const route = roleRoutes[user.role] || '/';

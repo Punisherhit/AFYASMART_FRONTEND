@@ -72,6 +72,8 @@ const userTypes = [
   { value: "billing", label: "Billing", icon: User, description: "Process hospital payments and invoices" },
   { value: "triage", label: "Triage", icon: User, description: "Prioritize and assess patient severity" },
   { value: "surgery", label: "Surgery", icon: User, description: "Perform and manage surgical operations" },
+  { value: "ward", label: "Ward", icon: User, description: "Manage inpatient wards and admissions" },
+  { value: "maternity", label: "Maternity", icon: User, description: "Manage antenatal, delivery and postnatal care" },
 ];
 
 

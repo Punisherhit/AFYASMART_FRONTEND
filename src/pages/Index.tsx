@@ -137,14 +137,16 @@ useEffect(() => {
               Track patients seamlessly through every department from check-in to pharmacy
             </p>
           </div>
-          <div className="grid md:grid-cols-6 gap-4 max-w-6xl mx-auto">
+          <div className="grid md:grid-cols-4 lg:grid-cols-8 gap-4 max-w-7xl mx-auto">
             {[
               { name: "Reception", icon: "🏥", desc: "Patient check-in & registration" },
               { name: "Triage", icon: "📋", desc: "Initial assessment & prioritization" },
-              { name: "Doctor", icon: "👨‍⚕️", desc: "Consultation & diagnosis" },
-              { name: "Lab/Radiology", icon: "🔬", desc: "Tests & imaging" },
-              { name: "Billing", icon: "💳", desc: "Payment processing" },
-              { name: "Pharmacy", icon: "💊", desc: "Medication dispensing" }
+              { name: "Consultation", icon: "👨‍⚕️", desc: "Doctor review & treatment plans" },
+              { name: "Lab", icon: "🧪", desc: "Clinical tests and reports" },
+              { name: "Radiology", icon: "🩻", desc: "Imaging diagnostics" },
+              { name: "Ward/ICU", icon: "🛏️", desc: "Inpatient and critical care" },
+              { name: "Maternity", icon: "🤱", desc: "Antenatal and delivery care" },
+              { name: "Billing & Pharmacy", icon: "💊", desc: "Payments then medication dispensing" }
             ].map((dept, index) => (
               <div key={dept.name} className="relative">
                 <div className="bg-card border rounded-lg p-4 text-center hover:shadow-hover transition-all duration-300">
@@ -152,7 +154,7 @@ useEffect(() => {
                   <h3 className="font-medium text-foreground mb-1">{dept.name}</h3>
                   <p className="text-xs text-muted-foreground">{dept.desc}</p>
                 </div>
-                {index < 5 && (
+                {index < 7 && (
                   <div className="hidden md:block absolute top-1/2 -right-2 w-4 h-0.5 bg-primary transform -translate-y-1/2"></div>
                 )}
               </div>

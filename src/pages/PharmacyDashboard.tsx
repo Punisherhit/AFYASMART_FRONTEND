@@ -31,6 +31,8 @@ import {
   Settings,
   Lock
 } from "lucide-react";
+import DashboardSettingsDialog from "@/components/DashboardSettingsDialog";
+import { FlowPatient, patientFlowApi, stageLabel } from "@/services/patientFlow";
 
 type Prescription = {
   patient: string;
@@ -71,6 +73,16 @@ type Alert = {
 
 const PharmacyDashboard = () => {
   const navigate = useNavigate();
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [flowPatients, setFlowPatients] = useState<FlowPatient[]>([]);
+
+  useEffect(() => {
+    const sync = () => setFlowPatients(patientFlowApi.getAll());
+    sync();
+    const unsubscribe = patientFlowApi.subscribe(sync);
+    return unsubscribe;
+  }, []);
+
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([
     { 
       patient: "John Doe", 
@@ -333,15 +345,15 @@ const PharmacyDashboard = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => toast.info("Profile editing will be available soon")}>
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsSettingsOpen(true)}>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsSettingsOpen(true)}>
                   <Lock className="mr-2 h-4 w-4" />
                   <span>Privacy</span>
                 </DropdownMenuItem>
@@ -354,6 +366,14 @@ const PharmacyDashboard = () => {
           </div>
         </div>
       </div>
+
+      <DashboardSettingsDialog
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+        storageKey="pharmacy"
+        title="Pharmacy Settings"
+        description="Manage inventory alerts, auto-refresh behavior and workspace preferences."
+      />
 
       <div className="p-6 max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
@@ -371,6 +391,32 @@ const PharmacyDashboard = () => {
             </Button>
           </div>
         </div>
+
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Linked Pharmacy Pickup Queue</CardTitle>
+            <CardDescription>Patients cleared from billing appear here with their tests and prescriptions.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {flowPatients.filter((p) => p.currentStage === "pharmacy").map((patient) => (
+              <div key={patient.id} className="rounded-md border p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{patient.name}</p>
+                    <p className="text-xs text-muted-foreground">Current stage: {stageLabel[patient.currentStage]}</p>
+                  </div>
+                  <Button size="sm" onClick={() => patientFlowApi.moveStage(patient.id, "completed", "Medication dispensed and patient discharged")}>Dispense & Complete</Button>
+                </div>
+                <p className="text-xs"><span className="font-medium">Prescriptions:</span> {patient.prescriptions.length ? patient.prescriptions.join(", ") : "None recorded"}</p>
+                <p className="text-xs"><span className="font-medium">Test Results:</span> {patient.tests.length ? patient.tests.join(" | ") : "No lab results"}</p>
+              </div>
+            ))}
+            {flowPatients.filter((p) => p.currentStage === "pharmacy").length === 0 && (
+              <p className="text-sm text-muted-foreground">No patients currently waiting at pharmacy.</p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Alerts Banner */}
         {activeAlerts.length > 0 && (
