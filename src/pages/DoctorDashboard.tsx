@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Users, FileText, Stethoscope, AlertTriangle, Pill, Phone, Plus, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FlowPatient, patientFlowApi, stageLabel } from "@/services/patientFlow";
 
 type Patient = {
   id: number;
@@ -57,6 +58,16 @@ const DoctorDashboard = () => {
     priority: "routine",
   });
   const [searchTerm, setSearchTerm] = useState("");
+  const [flowPatients, setFlowPatients] = useState<FlowPatient[]>([]);
+  const [doctorPrescription, setDoctorPrescription] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const sync = () => setFlowPatients(patientFlowApi.getAll());
+    sync();
+    const unsubscribe = patientFlowApi.subscribe(sync);
+    return unsubscribe;
+  }, []);
+
 
   const menuItems = [
     { id: "overview", label: "Overview", icon: Stethoscope },
@@ -241,6 +252,45 @@ const DoctorDashboard = () => {
 
         {/* Main Content */}
         <div className="flex-1 p-6">
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Cross-Department Consultation Queue</CardTitle>
+              <CardDescription>Patients assigned from triage: decide admission, lab tests, referrals, and billing handoff.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {flowPatients.filter((p) => p.currentStage === "consultation").map((patient) => (
+                <div key={patient.id} className="border rounded-md p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{patient.name}</p>
+                      <p className="text-xs text-muted-foreground">Department: {patient.consultationDepartment || "General"}</p>
+                    </div>
+                    <Badge variant="outline">{stageLabel[patient.currentStage]}</Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      placeholder="Prescription (e.g. Amoxicillin 500mg)"
+                      value={doctorPrescription[patient.id] || ""}
+                      onChange={(e) => setDoctorPrescription((prev) => ({ ...prev, [patient.id]: e.target.value }))}
+                      className="max-w-xs"
+                    />
+                    <Button size="sm" variant="outline" onClick={() => {
+                      const text = doctorPrescription[patient.id]?.trim();
+                      if (!text) return;
+                      patientFlowApi.addPrescription(patient.id, text);
+                      setDoctorPrescription((prev) => ({ ...prev, [patient.id]: "" }));
+                    }}>Add Prescription</Button>
+                    <Button size="sm" onClick={() => patientFlowApi.moveStage(patient.id, "lab", "Doctor requested laboratory tests")}>Send to Lab</Button>
+                    <Button size="sm" variant="outline" onClick={() => patientFlowApi.moveStage(patient.id, "billing", "Doctor completed consultation and sent to billing")}>Send to Billing</Button>
+                    <Button size="sm" variant="secondary" onClick={() => patientFlowApi.moveStage(patient.id, "completed", "Patient admitted for inpatient care")}>Admit</Button>
+                  </div>
+                </div>
+              ))}
+              {flowPatients.filter((p) => p.currentStage === "consultation").length === 0 && (
+                <p className="text-sm text-muted-foreground">No patients waiting for doctor consultation from triage.</p>
+              )}
+            </CardContent>
+          </Card>
           {activeTab === "overview" && (
             <div className="space-y-6">
               {/* ... (existing overview content remains the same) ... */}

@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DollarSign, CreditCard, FileText, Calculator, TrendingUp, AlertCircle, Plus, Trash2, Edit, Printer, Download, User, Clock } from "lucide-react";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import { FlowPatient, patientFlowApi } from "@/services/patientFlow";
 
 // Types
 type BillingItem = {
@@ -101,6 +102,15 @@ const BillingDashboard = () => {
     { department: "Laboratory", revenue: 0, percentage: 0 },
     { department: "Pharmacy", revenue: 0, percentage: 0 },
   ]);
+
+  const [flowPatients, setFlowPatients] = useState<FlowPatient[]>([]);
+
+  useEffect(() => {
+    const sync = () => setFlowPatients(patientFlowApi.getAll());
+    sync();
+    const unsubscribe = patientFlowApi.subscribe(sync);
+    return unsubscribe;
+  }, []);
 
   // Format currency in KES
   const formatCurrency = (amount: number) => {
@@ -426,6 +436,25 @@ const BillingDashboard = () => {
             </CardContent>
           </Card>
         </div>
+
+
+        <Card className="bg-card/50 backdrop-blur">
+          <CardHeader>
+            <CardTitle>Linked Patient Payment Queue</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {flowPatients.filter((p) => p.currentStage === "billing").map((patient) => (
+              <div key={patient.id} className="rounded-md border p-3 flex items-center justify-between">
+                <div>
+                  <p className="font-medium">{patient.name}</p>
+                  <p className="text-xs text-muted-foreground">Ready for billing after consultation/tests</p>
+                </div>
+                <Button size="sm" onClick={() => patientFlowApi.moveStage(patient.id, "pharmacy", "Payment completed and sent to pharmacy")}>Mark Paid & Send Pharmacy</Button>
+              </div>
+            ))}
+            {flowPatients.filter((p) => p.currentStage === "billing").length === 0 && <p className="text-sm text-muted-foreground">No linked patients awaiting payment.</p>}
+          </CardContent>
+        </Card>
 
         <Tabs defaultValue="invoicing" className="space-y-4">
           <TabsList className="grid w-full grid-cols-4">
